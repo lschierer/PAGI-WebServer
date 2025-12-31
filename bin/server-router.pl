@@ -1,7 +1,6 @@
 #!/usr/bin/env perl
-
-use strict;
-use warnings;
+use v5.42.0;
+use utf8::all;
 use lib 'lib';
 use PAGI::WebServer;
 use PAGI::WebServer::Router;
@@ -28,7 +27,7 @@ my $router = PAGI::WebServer::Router->new;
 
 $router->get('/' => async sub {
     my ($scope, $receive, $send) = @_;
-    
+
     await $send->({
         type => 'http.response.start',
         status => 200,
@@ -43,7 +42,7 @@ $router->get('/' => async sub {
 
 $router->get('/health' => async sub {
     my ($scope, $receive, $send) = @_;
-    
+
     my $json = '{"status":"ok","timestamp":' . time . '}';
     await $send->({
         type => 'http.response.start',

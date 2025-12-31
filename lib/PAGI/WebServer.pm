@@ -1,5 +1,6 @@
 package PAGI::WebServer;
 use v5.42.0;
+use utf8::all;
 use Future::AsyncAwait;
 use experimental 'signatures';
 use Encode qw(encode decode FB_DEFAULT FB_CROAK);

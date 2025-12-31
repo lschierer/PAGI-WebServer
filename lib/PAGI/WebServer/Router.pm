@@ -1,7 +1,6 @@
 package PAGI::WebServer::Router;
-
-use strict;
-use warnings;
+use v5.42.0;
+use utf8::all;
 use Moo;
 use Future::AsyncAwait;
 
@@ -22,30 +21,40 @@ sub post {
 
 sub to_app {
     my ($self) = @_;
-    
+
     return async sub {
         my ($scope, $receive, $send) = @_;
-        
+
         if ($scope->{type} eq 'http') {
             my $method = $scope->{method} // 'GET';
             my $path = $scope->{path} // '/';
-            
+
             my $handler = $self->routes->{$method}{$path};
-            
+
+            # If exact match found, use it
             if ($handler) {
                 await $handler->($scope, $receive, $send);
-            } else {
-                await $send->({
-                    type => 'http.response.start',
-                    status => 404,
-                    headers => [['content-type', 'text/plain']],
-                });
-                await $send->({
-                    type => 'http.response.body',
-                    body => 'Not Found',
-                    more => 0,
-                });
+                return;
             }
+
+            # Try wildcard handler
+            $handler = $self->routes->{$method}{'*'};
+            if ($handler) {
+                await $handler->($scope, $receive, $send);
+                return;
+            }
+
+            # No handler found
+            await $send->({
+                type => 'http.response.start',
+                status => 404,
+                headers => [['content-type', 'text/plain']],
+            });
+            await $send->({
+                type => 'http.response.body',
+                body => 'Not Found',
+                more => 0,
+            });
         }
     };
 }

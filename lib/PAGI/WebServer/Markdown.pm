@@ -1,29 +1,28 @@
 package PAGI::WebServer::Markdown;
-
-use strict;
-use warnings;
+use v5.42.0;
+use utf8::all;
 use Moo;
 use Pandoc;
 use Path::Tiny;
 use Log::Log4perl qw(get_logger);
 
-has pandoc => (is => 'lazy',);
+has pd => (is => 'lazy',);
 
 has modules => (
   is      => 'ro',
   default => sub { [] }
 );
 
-sub _build_pandoc {
+sub _build_pd {
   my $self   = shift;
-  my $pandoc = Pandoc->new;
+  my $pd = Pandoc->new;
 
-  # Configure pandoc with specified modules
+  # Configure pd with specified modules
   for my $module (@{ $self->modules }) {
-    $pandoc->add_filter($module);
+    $pd->add_filter($module);
   }
 
-  return $pandoc;
+  return $pd;
 }
 
 sub render {
@@ -34,7 +33,7 @@ sub render {
 
   my $content = path($markdown_file)->slurp_utf8;
 
-  my $html = $self->pandoc->convert(
+  my $html = $self->pd->convert(
     'markdown' => 'html',
     $content
   );

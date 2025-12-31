@@ -1,7 +1,6 @@
 package PAGI::WebServer::Assets;
-
-use strict;
-use warnings;
+use v5.42.0;
+use utf8::all;
 use Moo;
 use Path::Tiny;
 use Log::Log4perl qw(get_logger);

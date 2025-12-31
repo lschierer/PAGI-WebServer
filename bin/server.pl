@@ -1,7 +1,6 @@
 #!/usr/bin/env perl
-
-use strict;
-use warnings;
+use v5.42.0;
+use utf8::all;
 use lib 'lib';
 use PAGI::WebServer;
 use PAGI::Server;
@@ -25,10 +24,10 @@ $framework->setup_logging;
 # Create PAGI application coderef
 my $app = async sub {
     my ($scope, $receive, $send) = @_;
-    
+
     if ($scope->{type} eq 'http') {
         my $path = $scope->{path} // '/';
-        
+
         if ($path eq '/') {
             await $send->({
                 type => 'http.response.start',
