@@ -1,0 +1,6 @@
+[tools]
+perl = "5.42.0"
+node = "lts"
+pnpm = "latest"
+pandoc = "latest"
+just = "latest"

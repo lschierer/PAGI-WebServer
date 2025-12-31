@@ -1,0 +1,15 @@
+{
+  "name": "pagi-webserver",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "echo 'No tests yet'"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.2",
+    "postcss": "^8.5.0",
+    "postcss-cli": "^11.0.0"
+  }
+}

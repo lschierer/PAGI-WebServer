@@ -1,0 +1,18 @@
+# PAGI WebServer Framework Configuration
+
+# Stage: localDev, staging, production
+stage: localDev
+
+# Directory paths
+css_dir: share/styles
+typescript_dir: src/ts  
+markdown_dir: content
+
+# Pandoc modules to load
+pandoc_modules: []
+
+# Worker thread configuration
+worker_threads: 4
+
+# Module-specific log levels
+log_config: {}
