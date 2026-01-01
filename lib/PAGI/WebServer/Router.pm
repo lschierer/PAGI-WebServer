@@ -37,6 +37,19 @@ sub to_app {
                 return;
             }
 
+            # Try pattern matches
+            for my $pattern (keys %{$self->routes->{$method}}) {
+                if ($pattern =~ /\*$/) {
+                    my $prefix = $pattern;
+                    $prefix =~ s/\*$//;
+                    if ($path =~ /^\Q$prefix\E/) {
+                        $handler = $self->routes->{$method}{$pattern};
+                        await $handler->($scope, $receive, $send);
+                        return;
+                    }
+                }
+            }
+
             # Try wildcard handler
             $handler = $self->routes->{$method}{'*'};
             if ($handler) {
