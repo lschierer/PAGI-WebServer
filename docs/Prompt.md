@@ -1,5 +1,5 @@
 * This will be used as the base module for four projects. It will house the common code setting up 
-   * serving Markdown content with Pandoc
+   * serving Markdown content with [Pandoc](https://metacpan.org/pod/Pandoc)
    * Hooks for project specific dynamic content 
    * extending log4perl to allow for scaling up and down log levels on a per-module basis with stage (localDev, staging, production) specific defaults.
    * Hooks so that I can drop in CSS files that will then be compiled with PostCSS
@@ -10,8 +10,8 @@
 * [pandoc], [pnpm], [node], [perl] should all be managed by [mise]. 
 * require Perl 5.42
 * Require the latest typescript 24.x lts. 
-* use [PAGI](https://github.com/jjn1056/pagi/tree/main) since at least two of the four projects will feature significant asynchronous aspects, and one of the other two requires basic authentication across 90% of the site. 
-
+* use [PAGI](https://metacpan.org/pod/PAGI) since at least two of the four projects will feature significant asynchronous aspects, and one of the other two requires basic authentication across 90% of the site. 
+* Assume that both routes and data contain UTF-8
 
 
 [just]: https://just.systems/man/en/

@@ -29,7 +29,10 @@ sub to_app {
             my $method = $scope->{method} // 'GET';
             my $path = $scope->{path} // '/';
 
-            my $handler = $self->routes->{$method}{$path};
+            # Treat HEAD requests as GET for routing purposes
+            my $route_method = $method eq 'HEAD' ? 'GET' : $method;
+
+            my $handler = $self->routes->{$route_method}{$path};
 
             # If exact match found, use it
             if ($handler) {
@@ -37,13 +40,14 @@ sub to_app {
                 return;
             }
 
-            # Try pattern matches
-            for my $pattern (keys %{$self->routes->{$method}}) {
+            # Try pattern matches (sort by specificity - longer prefixes first)
+            my @patterns = sort { length($b) <=> length($a) } keys %{$self->routes->{$route_method}};
+            for my $pattern (@patterns) {
                 if ($pattern =~ /\*$/) {
                     my $prefix = $pattern;
                     $prefix =~ s/\*$//;
                     if ($path =~ /^\Q$prefix\E/) {
-                        $handler = $self->routes->{$method}{$pattern};
+                        $handler = $self->routes->{$route_method}{$pattern};
                         await $handler->($scope, $receive, $send);
                         return;
                     }
@@ -51,7 +55,7 @@ sub to_app {
             }
 
             # Try wildcard handler
-            $handler = $self->routes->{$method}{'*'};
+            $handler = $self->routes->{$route_method}{'*'};
             if ($handler) {
                 await $handler->($scope, $receive, $send);
                 return;
