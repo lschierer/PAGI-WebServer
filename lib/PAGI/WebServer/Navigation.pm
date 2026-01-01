@@ -44,6 +44,7 @@ sub build_tree {
 
     # Process each route and insert into tree
     for my $path (sort keys %{$self->routes}) {
+      next if $path =~ /^\/policy/i;
         my $route_data = $self->routes->{$path};
         $self->_insert_into_tree($tree, $path, $route_data);
     }
@@ -70,13 +71,22 @@ sub _insert_into_tree {
 
         if ($i == $#segments) {
             # Leaf node - this is the actual route
-            $current->{$segment} = {
-                path     => $accumulated_path,
-                title    => $data->{title},
-                order    => $data->{order},
-                is_leaf  => 1,
-                children => {},
-            };
+            if (exists $current->{$segment}) {
+                # Node already exists (probably as a parent), update its properties
+                $current->{$segment}{title} = $data->{title} if $data->{title};
+                $current->{$segment}{order} = $data->{order} if defined $data->{order};
+                # Keep is_leaf as 0 if it has children, otherwise set to 1
+                $current->{$segment}{is_leaf} = (keys %{$current->{$segment}{children}} == 0) ? 1 : 0;
+            } else {
+                # New leaf node
+                $current->{$segment} = {
+                    path     => $accumulated_path,
+                    title    => $data->{title},
+                    order    => $data->{order},
+                    is_leaf  => 1,
+                    children => {},
+                };
+            }
         } else {
             # Directory/parent node
             $current->{$segment} //= {
@@ -149,8 +159,14 @@ sub _render_tree_level {
         my $should_expand = $is_current || $is_ancestor || $is_top_level;
 
         # Determine if this node itself should be visible
-        # Always render, but hide with CSS if not visible
-        my $should_be_visible = $is_top_level || $is_ancestor || $is_current || $is_sibling || $is_child;
+        # Show all children of ancestor nodes so users can navigate to other branches
+        my $parent_is_ancestor = 0;
+        if ($parent_path) {
+            my $parent_path_normalized = $parent_path;
+            $parent_path_normalized =~ s|^/||;
+            $parent_is_ancestor = $current_path =~ m|^\Q$parent_path_normalized\E/|;
+        }
+        my $should_be_visible = $is_top_level || $is_ancestor || $is_current || $is_sibling || $is_child || $parent_is_ancestor;
 
         my $has_children = keys %{$node->{children}} > 0;
 
@@ -169,7 +185,8 @@ sub _render_tree_level {
 
         # Icon for expandable items
         if ($has_children) {
-            $html .= qq|    <span class="spectrum-TreeView-itemIndicator"></span>\n|;
+            my $icon = $should_expand ? 'ion:chevron-down' : 'ion:chevron-forward';
+            $html .= qq|    <iconify-icon icon="$icon" class="spectrum-TreeView-itemIndicator spectrum-Icon spectrum-Icon--medium" width="1em" height="1em"></iconify-icon>\n|;
         }
 
         # Link
@@ -180,7 +197,7 @@ sub _render_tree_level {
 
         # ALWAYS render children, but they'll be hidden by CSS if parent is not expanded
         if ($has_children) {
-            my @child_classes = ('spectrum-TreeView');
+            my @child_classes = ('spectrum-TreeView spectrum-TreeView--quiet spectrum-TreeView--sizeM');
             push @child_classes, 'nav-collapsed' unless $should_expand;  # CSS will hide this
             my $child_class_str = join(' ', @child_classes);
 
