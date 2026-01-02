@@ -67,8 +67,8 @@ has mode => (
 );
 
 sub _build_mode {
-    my $self = shift;
-    return $self->config->{mode} // 'development';
+  my $self = shift;
+  return $self->config->{mode} // 'development';
 }
 
 sub _build_config {
@@ -113,30 +113,31 @@ sub _build_stage {
 }
 
 async sub app ($scope, $receive, $send) {
-    die "Unsupported: $scope->{type}" if $scope->{type} ne 'http';
+  die "Unsupported: $scope->{type}" if $scope->{type} ne 'http';
 
-    my $text = '';
-    if ($scope->{query_string} =~ /text=([^&]+)/) {
-        my $bytes = $1; $bytes =~ s/%([0-9A-Fa-f]{2})/chr hex $1/eg;
-        $text = decode('UTF-8', $bytes, FB_DEFAULT);  # replacement for invalid
-    }
+  my $text = '';
+  if ($scope->{query_string} =~ /text=([^&]+)/) {
+    my $bytes = $1;
+    $bytes =~ s/%([0-9A-Fa-f]{2})/chr hex $1/eg;
+    $text = decode('UTF-8', $bytes, FB_DEFAULT);    # replacement for invalid
+  }
 
-    my $body    = "You sent: $text";
-    my $encoded = encode('UTF-8', $body, FB_CROAK);
+  my $body    = "You sent: $text";
+  my $encoded = encode('UTF-8', $body, FB_CROAK);
 
-    await $send->({
-        type    => 'http.response.start',
-        status  => 200,
-        headers => [
-            ['content-type',   'text/plain; charset=utf-8'],
-            ['content-length', length($encoded)],
-        ],
-    });
-    await $send->({
-        type => 'http.response.body',
-        body => $encoded,
-        more => 0,
-    });
+  await $send->({
+    type    => 'http.response.start',
+    status  => 200,
+    headers => [
+      ['content-type',   'text/plain; charset=utf-8'],
+      ['content-length', length($encoded)],
+    ],
+  });
+  await $send->({
+    type => 'http.response.body',
+    body => $encoded,
+    more => 0,
+  });
 }
 
 sub start {
@@ -147,9 +148,9 @@ sub start {
 
   # Start the server
   my $server = PAGI::Server->new(
-    app   => \&app,
-    host  => '127.0.0.1',
-    port  => 3000,
+    app  => \&app,
+    host => '127.0.0.1',
+    port => 3000,
   );
 
   $loop->add($server);

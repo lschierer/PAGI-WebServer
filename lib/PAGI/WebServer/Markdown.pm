@@ -14,8 +14,8 @@ has modules => (
 );
 
 sub _build_pd {
-  my $self   = shift;
-  my $pd = Pandoc->new;
+  my $self = shift;
+  my $pd   = Pandoc->new;
 
   # Configure pd with specified modules
   for my $module (@{ $self->modules }) {

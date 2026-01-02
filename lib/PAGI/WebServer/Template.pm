@@ -5,13 +5,13 @@ use Moo;
 use Template;
 use Path::Tiny;
 use Log::Log4perl qw(get_logger);
-use Encode qw(encode_utf8);
+use Encode        qw(encode_utf8);
 
 has tt => (is => 'lazy',);
 
 has template_dir => (
   is      => 'ro',
-  default => sub { 'templates' }
+  default => sub {'templates'}
 );
 
 has include_path => (
