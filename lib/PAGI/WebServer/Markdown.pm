@@ -5,6 +5,7 @@ use Moo;
 use Pandoc;
 use Path::Tiny;
 use Log::Log4perl qw(get_logger);
+use YAML::XS qw(Load);
 
 has pd => (is => 'lazy',);
 
@@ -25,6 +26,33 @@ sub _build_pd {
   return $pd;
 }
 
+sub parse_frontmatter {
+  my ($self, $content) = @_;
+
+  my $logger = get_logger(__PACKAGE__);
+
+  # Check for YAML frontmatter (--- at start, --- after frontmatter)
+  if ($content =~ /^---\n(.*?)\n---\n(.*)$/s) {
+    my ($yaml_str, $markdown) = ($1, $2);
+
+    my $frontmatter;
+    eval {
+      $frontmatter = Load($yaml_str);
+      $logger->debug("Parsed frontmatter: " . (ref $frontmatter ? "hash" : "scalar"));
+    };
+
+    if ($@) {
+      $logger->warn("Failed to parse YAML frontmatter: $@");
+      return ({}, $content);
+    }
+
+    return ($frontmatter, $markdown);
+  }
+
+  # No frontmatter found
+  return ({}, $content);
+}
+
 sub render {
   my ($self, $markdown_file, $template) = @_;
 
@@ -39,6 +67,23 @@ sub render {
   );
 
   return $html;
+}
+
+sub render_with_frontmatter {
+  my ($self, $markdown_file) = @_;
+
+  my $logger = get_logger(__PACKAGE__);
+  $logger->debug("Rendering markdown file with frontmatter: $markdown_file");
+
+  my $content = path($markdown_file)->slurp_utf8;
+  my ($frontmatter, $markdown) = $self->parse_frontmatter($content);
+
+  my $html = $self->pd->convert(
+    'markdown' => 'html',
+    $markdown
+  );
+
+  return ($frontmatter, $html);
 }
 
 1;

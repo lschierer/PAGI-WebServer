@@ -128,7 +128,7 @@ sub render {
   $current_path =~ s|^/||;
   $current_path =~ s|/$||;
 
-  my $html = '<ul class="spectrum-TreeView" role="tree">';
+  my $html = '<ul class="spectrum-TreeView spectrum-TreeView--quiet spectrum-TreeView--sizeM" role="tree">';
   $html .= $self->_render_tree_level($self->tree, $current_path, '', 0);
   $html .= '</ul>';
 
@@ -147,7 +147,8 @@ sub _render_tree_level {
       || ($nodes->{$a}{title} cmp $nodes->{$b}{title})
   } keys %$nodes;
 
-  for my $key (@sorted_keys) {
+  for my $index (0 .. $#sorted_keys) {
+    my $key = $sorted_keys[$index];
     my $node      = $nodes->{$key};
     my $node_path = $node->{path};
     $node_path =~ s|^/||;
@@ -187,27 +188,39 @@ sub _render_tree_level {
 
     my $class_str = join(' ', @classes);
 
-    $html .= qq|  <li class="$class_str" role="treeitem"|;
+    $html .= qq|  <li id="item${index}" class="$class_str" role="treeitem"|;
     $html .= qq| aria-expanded="true"|  if $should_expand  && $has_children;
     $html .= qq| aria-expanded="false"| if !$should_expand && $has_children;
     $html .= qq|>\n|;
 
-    # Icon for expandable items
-    if ($has_children) {
-      my $icon = $should_expand ? 'ion:chevron-down' : 'ion:chevron-forward';
-      $html .=
-qq|    <iconify-icon icon="$icon" class="spectrum-TreeView-itemIndicator spectrum-Icon spectrum-Icon--medium" width="1em" height="1em"></iconify-icon>\n|;
-    }
-
     # Link
     my $link_class = 'spectrum-TreeView-itemLink';
     $html .=
-qq|    <a href="$node->{path}" class="$link_class spectrum-Link spectrum-Link--primary spectrum-Link--quiet">\n|;
-    $html .=
-qq|      <span class="spectrum-TreeView-itemLabel">$node->{title}</span>\n|;
-    $html .= qq|    </a>\n|;
+qq|    <span class="$link_class spectrum-Link ">\n|;
 
-# ALWAYS render children, but they'll be hidden by CSS if parent is not expanded
+    my $itemIcon;
+    # Icon for expandable items
+    if ($has_children) {
+      # Spectrum-CSS rotates the icon 90 degrees when open,
+      # so use the same icon for both
+      my $icon = 'ion:chevron-forward';
+      $html .=
+    qq|    <iconify-icon icon="$icon" class="spectrum-TreeView-itemIndicator spectrum-Icon spectrum-Icon--medium" role="img" ></iconify-icon>\n|;
+      $itemIcon = "ion:folder-open-outline";
+    } else {
+      $itemIcon = "ion:document-text-outline"
+    }
+
+
+    $html .=
+qq|      <span class="spectrum-TreeView-itemLabel">
+          <iconify-icon focusable="false" aria-hidden="true" role="img" class="spectrum-Icon spectrum-Icon--sizeM spectrum-TreeView-itemIcon" icon="${itemIcon}" ></iconify-icon>
+          <a href="$node->{path}" class="spectrum-Link--primary spectrum-Link--quiet">$node->{title}</a>
+         </span>\n|;
+    $html .= qq|    </span>\n|;
+
+    # ALWAYS render children,
+    # but they'll be hidden by CSS if parent is not expanded
     if ($has_children) {
       my @child_classes =
         ('spectrum-TreeView spectrum-TreeView--quiet spectrum-TreeView--sizeM');
