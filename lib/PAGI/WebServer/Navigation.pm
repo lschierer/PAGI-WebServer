@@ -95,7 +95,7 @@ sub _insert_into_tree {
       $current->{$segment} //= {
         path     => $accumulated_path,
         title    => $self->_path_segment_to_title($segment),
-        order    => 0,
+        order    => 999,  # Default high order, will be updated by index.md
         is_leaf  => 0,
         children => {},
       };
@@ -196,7 +196,7 @@ sub _render_tree_level {
     # Link
     my $link_class = 'spectrum-TreeView-itemLink';
     $html .=
-qq|    <span class="$link_class spectrum-Link ">\n|;
+qq|    <span class="$link_class spectrum-Link spectrum-Link--quiet">\n|;
 
     my $itemIcon;
     # Icon for expandable items
@@ -215,7 +215,7 @@ qq|    <span class="$link_class spectrum-Link ">\n|;
     $html .=
 qq|      <span class="spectrum-TreeView-itemLabel">
           <iconify-icon focusable="false" aria-hidden="true" role="img" class="spectrum-Icon spectrum-Icon--sizeM spectrum-TreeView-itemIcon" icon="${itemIcon}" ></iconify-icon>
-          <a href="$node->{path}" class="spectrum-Link--primary spectrum-Link--quiet">$node->{title}</a>
+          <a href="$node->{path}" class="spectrum-Link spectrum-Link--secondary spectrum-Link--quiet">$node->{title}</a>
          </span>\n|;
     $html .= qq|    </span>\n|;
 
