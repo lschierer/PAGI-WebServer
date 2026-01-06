@@ -1,7 +1,7 @@
-package PAGI::WebServer::Markdown;
+package WebFramework::Service::Markdown;
 use v5.42.0;
 use utf8::all;
-use Moo;
+use Mooish::Base -standard;
 use Pandoc;
 use Path::Tiny;
 use Log::Log4perl qw(get_logger);
@@ -13,6 +13,11 @@ has modules => (
   is      => 'ro',
   default => sub { [] }
 );
+
+sub build ($self) {
+  $self->pd($self->_build_pd);
+
+}
 
 sub _build_pd {
   my $self = shift;
