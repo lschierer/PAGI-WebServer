@@ -1,9 +1,9 @@
-package WebFramework::Role::Navigation;
+package WebFramework::Module::Navigation;
 use v5.42.0;
 use utf8::all;
-use Mooish::Base -role;
-use experimental 'signatures';
-use Log::Log4perl qw(get_logger);
+use Mooish::Base -standard;
+with 'WebFramework::Role::Logger';
+extends 'Thunderhorse::Module';
 
 has navigation_routes => (
     is      => 'ro',
@@ -17,11 +17,26 @@ has navigation_tree => (
 
 has navigation_logger => (
     is      => 'lazy',
-    default => sub { get_logger(__PACKAGE__) },
+    default => sub { Log::Handler->create_logger(__PACKAGE__) },
 );
 
+sub build ($self){
+  $self->register(
+    controller => add_navigation_route => sub ($controller, $path, $title, $options = {}) {
+      $self->_add_navigation_route($path, $title, $options);
+      return $controller;
+    }
+  );
+
+  $self->register(
+    controller => render_navigation => sub ($controller, $current_path = '/') {
+      return $self->_render_navigation($current_path);
+    }
+  );
+}
+
 # Register a route for navigation
-sub add_navigation_route ($self, $path, $title, $options = {}) {
+sub _add_navigation_route ($self, $path, $title, $options = {}) {
     $self->navigation_logger->debug("Adding navigation route: $path => $title");
 
     $self->navigation_routes->{$path} = {
@@ -109,7 +124,7 @@ sub _navigation_path_segment_to_title ($self, $segment) {
 }
 
 # Render the navigation tree as HTML
-sub render_navigation ($self, $current_path = '/') {
+sub _render_navigation ($self, $current_path = '/') {
     # Ensure tree is built
     $self->build_navigation_tree() unless keys %{ $self->navigation_tree };
 

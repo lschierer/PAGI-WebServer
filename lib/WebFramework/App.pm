@@ -31,6 +31,7 @@ sub build ($self) {
 
   $self->logSetup(__PACKAGE__);
 
+  $self->load_module('^WebFramework::Module::Navigation');
   $self->load_module('^WebFramework::Module::MarkdownTemplate' => $self->config->{template} // {});
   $self->load_module('^WebFramework::Module::AutoIndex');
 

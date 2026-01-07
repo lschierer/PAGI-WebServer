@@ -3,12 +3,10 @@ use v5.42.0;
 use utf8::all;
 use Mooish::Base -standard;
 with 'WebFramework::Role::Logger';
-use Mooish::Base -standard;
+extends 'Thunderhorse::Module';
 
 use Gears::X::Thunderhorse;
 use Gears::Template::TT;
-
-extends 'Thunderhorse::Module';
 
 use Path::Tiny;
 use Encode qw(encode_utf8);
@@ -49,6 +47,7 @@ sub _build_template ($self) {
 
     # Set default include path if not configured
     $config->{INCLUDE_PATH} //= ['templates', 'templates/partials'];
+    $self->logger->debug('markdown template include path: ', join(', ', @{ $config->{INCLUDE_PATH} }));
 
     # Debug: log the template configuration
     use Data::Printer;
@@ -60,26 +59,39 @@ sub _build_template ($self) {
 
 sub build ($self) {
     # Get template configuration from app config and pass it to parent
-    my $template_config = {};
-    if (my $config = $self->config) {
-        if (my $tpl_conf = $config->{template}) {
-            $template_config = $tpl_conf;
+    my $config = {};
+    if (my $app_config = $self->config) {
+        if (my $template_config = $app_config->{config}->{template}) {
+            $config = $template_config;
         }
     }
 
     # Set default include path if not configured
-    $template_config->{INCLUDE_PATH} //= ['templates', 'templates/partials'];
+    $config->{INCLUDE_PATH} //= ['templates', 'templates/partials'];
+    $self->logger->debug('markdown template include path: ', join(', ', @{ $config->{INCLUDE_PATH} }));
+
 
     # Store the config for the parent template builder
-    $self->{_template_config} = $template_config;
+    $self->{_template_config} = $config;
 
     weaken $self;
-    my $tpl = $self->template;
     my $markdown = $self->markdown;
     my $pages_dir = $self->pages_dir;
 
     # Register render_markdown_page for full page rendering
     $self->register(
+        controller => parse_markdown_frontmatter => sub ($controller, $md_file_path ){
+          my $md_file = ref($md_file_path) ? $md_file_path : path($md_file_path);
+
+          return unless $md_file->exists;
+          my ($frontmatter, $content_html) =
+              $markdown->render_with_frontmatter($md_file->stringify);
+
+          return $frontmatter;
+
+        });
+
+      $self->register(
         controller => render_markdown_page => sub ($controller, $md_file_path, $url_path, $extra_vars = {}) {
             my $md_file = ref($md_file_path) ? $md_file_path : path($md_file_path);
 
@@ -100,6 +112,8 @@ sub build ($self) {
             }
 
             my $current_year = (localtime)[5] + 1900;
+            my $sidebar = $frontmatter->{layout} // 1;
+            $sidebar = 0 if($sidebar =~ /splash/);
 
             # Build template vars
             my $vars = {
@@ -107,18 +121,19 @@ sub build ($self) {
                 title        => $title,
                 current_year => $current_year,
                 css_files    => ['/css/navigation.css'],
-                sidebar      => 1,
+                sidebar      => $sidebar,
+                nav_html     => $controller->render_navigation($url_path),
                 %$extra_vars,  # Allow caller to override/extend
             };
 
-            return $tpl->process('page/markdown.tt', $vars, { layout => 'layouts/default.tt' });
+            return $controller->render('page/markdown.tt', $vars, );
         }
     );
 
     # Register render_markdown_snippet for content-only rendering
     $self->register(
         controller => render_markdown_snippet => sub ($controller, $md_file_path) {
-            my $md_file = ref($md_file_path) ? $md_file_path : path($md_file_path);
+            my $md_file = path($md_file_path);
 
             return unless $md_file->exists;
 

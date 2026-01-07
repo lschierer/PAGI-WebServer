@@ -6,6 +6,8 @@ use Pandoc;
 use Path::Tiny;
 use Log::Log4perl qw(get_logger);
 use YAML::XS qw(Load);
+use Encode qw(encode_utf8);
+
 
 has pd => (is => 'lazy',);
 
@@ -42,7 +44,7 @@ sub parse_frontmatter {
 
     my $frontmatter;
     eval {
-      $frontmatter = Load($yaml_str);
+      $frontmatter = Load(encode_utf8($yaml_str));
       $logger->debug("Parsed frontmatter: " . (ref $frontmatter ? "hash" : "scalar"));
     };
 

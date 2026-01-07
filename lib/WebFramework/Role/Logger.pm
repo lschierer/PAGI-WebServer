@@ -17,10 +17,10 @@ has 'accessLogFH' => (
   lazy  => 1,
 );
 
-has logger => (
-  is      => 'ro',
-  default => sub {
-    my $l = Log::Handler->new();
+sub logger {
+  state $l;
+  unless($l){
+    $l = Log::Handler->new();
     $l->add(
       screen  => {
         log_to   => "STDERR",
@@ -29,9 +29,9 @@ has logger => (
         utf8     => 1,
       }
     );
-    return $l;
-  },
-);
+  }
+  return $l;
+}
 
 # Thunderhorse's Logger module only adds a logger to Controllers.
 # Provide a logger to this package as well.
