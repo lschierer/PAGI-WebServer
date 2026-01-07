@@ -21,8 +21,10 @@ unless($mode =~ /(development|staging|production)/ ){
   croak("mode must be one of development|staging|production, not '$mode'.");
 }
 
-say 'Calling WebFramework::App->new->run';
+my $config_dir = 'share/conf';
+my $local_config = WebFramework::App->getConfig($mode, $config_dir);
+
 WebFramework::App->new(
-  #initial_config  => 'share/conf',
+  initial_config  => $local_config,
   env             => $mode,
 )->run;

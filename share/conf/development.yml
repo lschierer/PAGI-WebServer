@@ -3,9 +3,26 @@
 # Stage: localDev, staging, production
 stage: localDev
 
+modules:
+  Template:
+    paths:
+      - templates
+      - templates/partials
+
+# Server configuration
+server:
+  host: 127.0.0.1
+  port: 3001
+
+# Template configuration
+template:
+  INCLUDE_PATH:
+    - templates
+    - templates/partials
+
 # Directory paths
 css_dir: share/styles
-typescript_dir: src/ts  
+typescript_dir: src/ts
 markdown_dir: content
 
 # Pandoc modules to load

@@ -39,7 +39,6 @@ sub logSetup ($self, $base) {
   my $home = Path::Tiny::path(File::HomeDir::Tiny::home);
   my @parts = split '::', $base;
   my $logdir = $home->child(sprintf('var/log/Perl/dist/%s/', join('-', @parts[0 .. $#parts -1 ])));
-  say "logdir is $logdir";
 
   unless(-d $logdir){
     $logdir->mkdir({mode => 0750});

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Status</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: white;
+            color: #333;
+            margin: 2rem;
+            line-height: 1.6;
+        }
+        dl {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        dt {
+            font-weight: 600;
+            margin-top: 1rem;
+            color: #495057;
+        }
+        dt:first-child {
+            margin-top: 0;
+        }
+        dd {
+            margin: 0.5rem 0 0 1rem;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+        }
+        .config-dump {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 1rem;
+            overflow-x: auto;
+            font-size: 0.9em;
+        }
+        .config-dump pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Health Status</h1>
+    <dl>
+        <dt>Environment:</dt>
+        <dd>[% env %]</dd>
+        
+        <dt>Connections:</dt>
+        <dd>[% connections %] / [% max_connections %]</dd>
+        
+        <dt>Configuration:</dt>
+        <dd>
+            <div class="config-dump">
+                <pre>[% config_dump %]</pre>
+            </div>
+        </dd>
+    </dl>
+</body>
+</html>

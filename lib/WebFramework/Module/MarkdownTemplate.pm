@@ -3,7 +3,12 @@ use v5.42.0;
 use utf8::all;
 use Mooish::Base -standard;
 with 'WebFramework::Role::Logger';
-extends 'Thunderhorse::Module::Template';
+use Mooish::Base -standard;
+
+use Gears::X::Thunderhorse;
+use Gears::Template::TT;
+
+extends 'Thunderhorse::Module';
 
 use Path::Tiny;
 use Encode qw(encode_utf8);
@@ -28,9 +33,45 @@ sub _build_pages_dir ($self) {
     return path($FindBin::Bin)->parent->child('share/pages');
 }
 
+has field 'template' => (
+	isa => InstanceOf ['Gears::Template'],
+	lazy => 1,
+);
+
+sub _build_template ($self) {
+    # Get the template configuration from the nested config structure
+    my $config = {};
+    if (my $app_config = $self->config) {
+        if (my $template_config = $app_config->{config}->{template}) {
+            $config = $template_config;
+        }
+    }
+
+    # Set default include path if not configured
+    $config->{INCLUDE_PATH} //= ['templates', 'templates/partials'];
+
+    # Debug: log the template configuration
+    use Data::Printer;
+    $self->logger->debug("Template config in _build_template: " . Data::Printer::np($config));
+
+    require Gears::Template::TT;
+    return Gears::Template::TT->new($config->%*);
+}
+
 sub build ($self) {
-    # Call parent to register the basic 'render' method
-    $self->SUPER::build();
+    # Get template configuration from app config and pass it to parent
+    my $template_config = {};
+    if (my $config = $self->config) {
+        if (my $tpl_conf = $config->{template}) {
+            $template_config = $tpl_conf;
+        }
+    }
+
+    # Set default include path if not configured
+    $template_config->{INCLUDE_PATH} //= ['templates', 'templates/partials'];
+
+    # Store the config for the parent template builder
+    $self->{_template_config} = $template_config;
 
     weaken $self;
     my $tpl = $self->template;

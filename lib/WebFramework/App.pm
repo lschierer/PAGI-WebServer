@@ -10,12 +10,19 @@ require PAGI::Server;
 require Path::Tiny;
 require Thunderhorse::Module::Logger;
 require Thunderhorse::Module::Template;
+require Data::Printer;
+require YAML::PP;
 #use Encode              qw(encode decode FB_DEFAULT FB_CROAK);
 use File::HomeDir::Tiny ();
 use Carp;
 use IO::Async::Loop;
 
 our $VERSION = '0.01';
+
+has 'server' => (
+  is    => 'rw',
+  lazy  => 1,
+);
 
 
 sub build ($self) {
@@ -24,20 +31,10 @@ sub build ($self) {
 
   $self->logSetup(__PACKAGE__);
 
-  $self->load_module('^WebFramework::Module::MarkdownTemplate');
+  $self->load_module('^WebFramework::Module::MarkdownTemplate' => $self->config->{template} // {});
   $self->load_module('^WebFramework::Module::AutoIndex');
 
   my $router = $self->router;
-
-  $router->add(
-    '/',
-    {
-      to     => sub ($self, $ctx) {
-                                      return 'Hello?';
-                              },
-      action => 'http.get',
-    }
-  );
 
   $router->add(
     '/health',
@@ -48,23 +45,37 @@ sub build ($self) {
   );
 }
 
-
+sub getConfig ($class,$env, $dirstring){
+  use FindBin;
+  my $configdir = Path::Tiny::path($FindBin::Bin)->parent->child($dirstring);
+  unless($configdir->is_dir){
+    croak("config directory '$configdir' must exist.");
+  }
+  my $file = $configdir->child(sprintf('%s.yml', $env));
+  my $data   = $file->slurp_utf8;
+  my $config = YAML::PP->new(
+    schema       => [qw/ + Perl /],
+    yaml_version => ['1.2', '1.1'],
+  )->load_string($data);
+  return $config;
+}
 
 sub run {
   my $self = shift;
   $self->logger->debug('WebFramework::App run start');
-  say sprintf('WebFramework::App->env is "%s"', $self->env);
-  my $pagi = $self->SUPER::run();
+  $self->logger->debug(sprintf('WebFramework::App->env is "%s"', $self->env));
+
+  my $pagi_stub = $self->SUPER::run();
   my $loop = IO::Async::Loop->new;
-  my $server = PAGI::Server->new(
-      app  => $pagi,
+  $self->server(PAGI::Server->new(
+      app  => $pagi_stub,
       host => '127.0.0.1',
       port => 3000,
       access_log => $self->accessLogFH,
       log_level  => $self->env eq 'development' ? 'info' : 'warn',
-  );
-  $loop->add($server);
-  $server->listen->get;  # Start accepting connections
+  ));
+  $loop->add($self->server);
+  $self->server->listen->get;  # Start accepting connections
   $loop->run;
 }
 
@@ -77,7 +88,31 @@ async sub on_startup ($self, $state)
 
 
 sub health ($self, $ctx) {
-  return 'health Hello?';
+  my $env = $self->env;
+  my $connections = $self->server->connection_count;
+  my $maxconn = $self->server->effective_max_connections;
+
+  # Use Data::Printer's plain text output for clean formatting
+  use Data::Printer;
+  my $config_dump = Data::Printer::np($self->config,
+    multiline => 1,
+    colored => 0,  # Disable colors to avoid ANSI codes
+    theme => 'Material',
+  );
+
+  # Debug: check template configuration
+  use Cwd;
+  my $cwd = getcwd();
+  $self->logger->debug("Current working directory: $cwd");
+  my $tc = $self->config->{template} // {};
+  $self->logger->debug(sprintf('Template config: "%s"', Data::Printer::np($tc) // ''));
+
+  return $self->render('health.tt', {
+    env => $env,
+    connections => $connections,
+    max_connections => $maxconn,
+    config_dump => $config_dump,
+  });
 }
 
 1;
