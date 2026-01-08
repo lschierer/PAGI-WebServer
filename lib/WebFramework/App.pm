@@ -71,10 +71,12 @@ sub run {
 
   my $pagi_stub = $self->SUPER::run();
   my $loop      = IO::Async::Loop->new;
+  my $host = $self->config->{config}->{server}->{host};
+  my $port = $self->config->{config}->{server}->{port};
   $self->server(PAGI::Server->new(
     app        => $pagi_stub,
-    host       => '127.0.0.1',
-    port       => 3000,
+    host       => $host,
+    port       => $port,
     access_log => $self->accessLogFH,
     log_level  => $self->env eq 'development' ? 'info' : 'warn',
   ));
