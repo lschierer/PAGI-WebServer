@@ -8,104 +8,104 @@ use Log::Log4perl qw(get_logger);
 
 extends 'Thunderhorse::Module';
 
-has field 'pages_dir' => (
-    lazy => 1,
-);
+has field 'pages_dir' => (lazy => 1,);
 
-has field 'markdown' => (
-    lazy => 1,
-);
+has field 'markdown' => (lazy => 1,);
 
 sub _build_pages_dir ($self) {
-    # Default to share/pages relative to project root
-    use FindBin;
-    return path($FindBin::Bin)->parent->child('share/pages');
+  # Default to share/pages relative to project root
+  use FindBin;
+  return path($FindBin::Bin)->parent->child('share/pages');
 }
 
 sub _build_markdown ($self) {
-    # Get markdown service from the app's loaded modules
-    # This assumes MarkdownTemplate module is also loaded
-    require WebFramework::Service::Markdown;
-    return WebFramework::Service::Markdown->new;
+  # Get markdown service from the app's loaded modules
+  # This assumes MarkdownTemplate module is also loaded
+  require WebFramework::Service::Markdown;
+  return WebFramework::Service::Markdown->new;
 }
 
 sub build ($self) {
-    weaken $self;
-    my $pages_dir = $self->pages_dir;
-    my $markdown = $self->markdown;
-    
-    # Register generate_directory_index method
-    $self->register(
-        controller => generate_directory_index => sub ($controller, $path) {
-            my $logger = get_logger(__PACKAGE__);
-            $logger->debug("Generating directory index for: $path");
+  weaken $self;
+  my $pages_dir = $self->pages_dir;
+  my $markdown  = $self->markdown;
 
-            $path = path($path) unless ref $path eq 'Path::Tiny';
-            $path = $path->parent if $path->basename eq 'index.md';
+  # Register generate_directory_index method
+  $self->register(
+    controller => generate_directory_index => sub ($controller, $path) {
+      my $logger = get_logger(__PACKAGE__);
+      $logger->debug("Generating directory index for: $path");
 
-            my @entries;
+      $path = path($path) unless ref $path eq 'Path::Tiny';
+      $path = $path->parent if $path->basename eq 'index.md';
 
-            foreach my $child ($path->children) {
-                next if $child->basename eq 'index.md';
-                $logger->debug("Inspecting: $child");
+      my @entries;
 
-                if ($child->is_dir) {
-                    $logger->debug("$child is a directory");
+      foreach my $child ($path->children) {
+        next if $child->basename eq 'index.md';
+        $logger->debug("Inspecting: $child");
 
-                    my $name = $child->basename;
-                    $name =~ s/_/ /g;
-                    $name = join(' ', map { ucfirst lc } split ' ', $name);
+        if ($child->is_dir) {
+          $logger->debug("$child is a directory");
 
-                    my $route = $child->relative($pages_dir);
-                    $route = "/$route";
+          my $name = $child->basename;
+          $name =~ s/_/ /g;
+          $name = join(' ', map { ucfirst lc } split ' ', $name);
 
-                    push @entries, {
-                        title => $name,
-                        path  => $route,
-                        type  => 'directory'
-                    };
-                }
-                elsif ($child->basename =~ /\.md$/) {
-                    $logger->debug("$child is a markdown file");
+          my $route = $child->relative($pages_dir);
+          $route = "/$route";
 
-                    # Parse frontmatter for title
-                    my $content = $child->slurp_utf8;
-                    my ($frontmatter, $markdown_content) = $markdown->parse_frontmatter($content);
-
-                    my $title = $frontmatter->{title} || $self->_titleize($child->basename =~ s/\.md$//r);
-                    my $basename = $child->basename =~ s/\.md$//r;
-
-                    my $route = $child->parent->relative($pages_dir);
-                    $route = "/$route/$basename";
-                    $route =~ s|//|/|g;  # Clean up double slashes
-
-                    push @entries, {
-                        title => $title,
-                        path  => $route,
-                        type  => 'file',
-                        order => $frontmatter->{sidebar}{order} // 999,
-                    };
-                }
-                else {
-                    $logger->warn("File with odd extension: $child");
-                }
-            }
-
-            # Sort entries by order if present, then by title
-            @entries = sort {
-                ($a->{order} // 999) <=> ($b->{order} // 999)
-                || $a->{title} cmp $b->{title}
-            } @entries;
-
-            $logger->debug("Generated " . scalar(@entries) . " entries");
-            return \@entries;
+          push @entries,
+            {
+            title => $name,
+            path  => $route,
+            type  => 'directory'
+            };
         }
-    );
+        elsif ($child->basename =~ /\.md$/) {
+          $logger->debug("$child is a markdown file");
+
+          # Parse frontmatter for title
+          my $content = $child->slurp_utf8;
+          my ($frontmatter, $markdown_content) =
+            $markdown->parse_frontmatter($content);
+
+          my $title = $frontmatter->{title}
+            || $self->_titleize($child->basename =~ s/\.md$//r);
+          my $basename = $child->basename =~ s/\.md$//r;
+
+          my $route = $child->parent->relative($pages_dir);
+          $route = "/$route/$basename";
+          $route =~ s|//|/|g;    # Clean up double slashes
+
+          push @entries,
+            {
+            title => $title,
+            path  => $route,
+            type  => 'file',
+            order => $frontmatter->{sidebar}{order} // 999,
+            };
+        }
+        else {
+          $logger->warn("File with odd extension: $child");
+        }
+      }
+
+      # Sort entries by order if present, then by title
+      @entries = sort {
+        ($a->{order} // 999) <=> ($b->{order} // 999)
+          || $a->{title} cmp $b->{title}
+      } @entries;
+
+      $logger->debug("Generated " . scalar(@entries) . " entries");
+      return \@entries;
+    }
+  );
 }
 
 sub _titleize ($self, $text) {
-    $text =~ s/_/ /g;
-    return join ' ', map { ucfirst lc } split ' ', $text;
+  $text =~ s/_/ /g;
+  return join ' ', map { ucfirst lc } split ' ', $text;
 }
 
 1;

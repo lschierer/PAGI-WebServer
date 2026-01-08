@@ -1,4 +1,5 @@
 use v5.42.0;
+
 package WebFramework::Role::Logger;
 use utf8::all;
 use Mooish::Base -role;
@@ -8,21 +9,21 @@ use Log::Handler;
 use Carp;
 
 has 'accessLog' => (
-  is    => 'rw',
-  lazy  => 1,
+  is   => 'rw',
+  lazy => 1,
 );
 
 has 'accessLogFH' => (
-  is    => 'rw',
-  lazy  => 1,
+  is   => 'rw',
+  lazy => 1,
 );
 
 sub logger {
   state $l;
-  unless($l){
+  unless ($l) {
     $l = Log::Handler->new();
     $l->add(
-      screen  => {
+      screen => {
         log_to   => "STDERR",
         maxlevel => "warning",
         minlevel => "emergency",
@@ -36,12 +37,13 @@ sub logger {
 # Thunderhorse's Logger module only adds a logger to Controllers.
 # Provide a logger to this package as well.
 sub logSetup ($self, $base) {
-  my $home = Path::Tiny::path(File::HomeDir::Tiny::home);
-  my @parts = split '::', $base;
-  my $logdir = $home->child(sprintf('var/log/Perl/dist/%s/', join('-', @parts[0 .. $#parts -1 ])));
+  my $home   = Path::Tiny::path(File::HomeDir::Tiny::home);
+  my @parts  = split '::', $base;
+  my $logdir = $home->child(
+    sprintf('var/log/Perl/dist/%s/', join('-', @parts[0 .. $#parts - 1])));
 
-  unless(-d $logdir){
-    $logdir->mkdir({mode => 0750});
+  unless (-d $logdir) {
+    $logdir->mkdir({ mode => 0750 });
   }
 
   $self->accessLog($logdir->child('access.log'));
@@ -50,33 +52,33 @@ sub logSetup ($self, $base) {
   # Open the access log filehandle
   open(my $access_fh, '>>:utf8', $self->accessLog->stringify)
     or die "Cannot open access log: $!";
-  $access_fh->autoflush(1);  # Ensure immediate writes
+  $access_fh->autoflush(1);    # Ensure immediate writes
   $self->accessLogFH($access_fh);
 
   my $systemLog = $logdir->child('system.log');
-  my $maxlevel = 'warning';
-  if($self->env eq 'development'){
+  my $maxlevel  = 'warning';
+  if ($self->env eq 'development') {
     $maxlevel = 'debug';
-  }elsif($self->env eq 'staging'){
+  }
+  elsif ($self->env eq 'staging') {
     $maxlevel = 'info';
   }
 
   # for future use
   my $logExceptions = '';
-  my $outputs = {
+  my $outputs       = {
     file => {
-      filename      => $systemLog->stringify,
-      maxlevel      => $maxlevel,
-      minlevel      => 'emergency',
-      utf8          => 1,
+      filename => $systemLog->stringify,
+      maxlevel => $maxlevel,
+      minlevel => 'emergency',
+      utf8     => 1,
     },
   };
 
-  foreach my $output (keys $outputs->%*){
+  foreach my $output (keys $outputs->%*) {
     $self->logger->add($output => $outputs->{$output});
   }
 }
-
 
 1;
 __END__

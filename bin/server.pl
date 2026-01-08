@@ -17,14 +17,14 @@ GetOptions(
   'mode=s'   => \$mode,
 ) or die "Error in command line arguments\n";
 
-unless($mode =~ /(development|staging|production)/ ){
+unless ($mode =~ /(development|staging|production)/) {
   croak("mode must be one of development|staging|production, not '$mode'.");
 }
 
-my $config_dir = 'share/conf';
+my $config_dir   = 'share/conf';
 my $local_config = WebFramework::App->getConfig($mode, $config_dir);
 
 WebFramework::App->new(
-  initial_config  => $local_config,
-  env             => $mode,
+  initial_config => $local_config,
+  env            => $mode,
 )->run;
