@@ -73,6 +73,9 @@ sub run {
   my $loop      = IO::Async::Loop->new;
   my $host = $self->config->{config}->{server}->{host};
   my $port = $self->config->{config}->{server}->{port};
+  my $msg = sprintf('Starting server on host "%s:%s"', $host, $port);
+  warn $msg;
+  $self->logger->info($msg);
   $self->server(PAGI::Server->new(
     app        => $pagi_stub,
     host       => $host,
