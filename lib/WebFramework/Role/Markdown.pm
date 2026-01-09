@@ -4,11 +4,10 @@ use utf8::all;
 use Mooish::Base -role;
 with 'WebFramework::Role::Logger';
 require Path::Tiny;
+require YAML::XS;
 
 use Gears::X::Thunderhorse;
 use Gears::Template::TT;
-
-use Encode qw(encode_utf8);
 use Carp;
 require WebFramework::Service::Markdown;
 
@@ -72,15 +71,16 @@ sub parse_markdown_frontmatter ($self, $md_file_path) {
   my $md_file = Path::Tiny::path($md_file_path);
 
   return unless $md_file->exists;
-  
+
   # Fast frontmatter extraction - only read the YAML header
-  my $content = $md_file->slurp_utf8;
+  # Use slurp_raw since YAML::XS expects byte strings
+  my $content = $md_file->slurp_raw;
   my ($yaml_text) = $content =~ /^---\s*\n(.*?)\n---/s;
-  
+
   return {} unless $yaml_text;
-  
+
   # Parse just the YAML frontmatter
-  require YAML::XS;
+  # YAML::XS expects UTF-8 byte strings and will decode them internally
   my $frontmatter = eval { YAML::XS::Load($yaml_text) };
   return $frontmatter || {};
 }
