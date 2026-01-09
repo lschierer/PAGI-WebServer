@@ -1,9 +1,9 @@
 package PAGI::WebServer::Assets;
 use v5.42.0;
 use utf8::all;
-use Moo;
+use Mooish::Base -standard;
+with 'WebFramework::Role::Logger';
 use Path::Tiny;
-use Log::Log4perl qw(get_logger);
 
 has css_dir => (
   is       => 'ro',
@@ -18,8 +18,7 @@ has typescript_dir => (
 sub compile_css {
   my ($self, $output_dir) = @_;
 
-  my $logger = get_logger(__PACKAGE__);
-  $logger->info("Compiling CSS from " . $self->css_dir);
+  $self->logger->info("Compiling CSS from " . $self->css_dir);
 
   my $css_path = path($self->css_dir);
   return unless $css_path->exists;
@@ -32,8 +31,7 @@ sub compile_css {
 sub compile_typescript {
   my ($self, $output_dir) = @_;
 
-  my $logger = get_logger(__PACKAGE__);
-  $logger->info("Compiling TypeScript from " . $self->typescript_dir);
+  $self->logger->info("Compiling TypeScript from " . $self->typescript_dir);
 
   my $ts_path = path($self->typescript_dir);
   return unless $ts_path->exists;

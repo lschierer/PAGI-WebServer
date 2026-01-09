@@ -1,16 +1,23 @@
 package WebFramework::Module::AutoIndex;
 use v5.42.0;
 use Mooish::Base -standard;
+with 'WebFramework::Role::Logger';
 use experimental 'signatures';
+require Log::Handler;
 
 use Path::Tiny;
-use Log::Log4perl qw(get_logger);
 
 extends 'Thunderhorse::Module';
 
-has field 'pages_dir' => (lazy => 1,);
+has pages_dir => (
+  is  => 'rw',
+  lazy => 1,
+);
 
-has field 'markdown' => (lazy => 1,);
+has  markdown => (
+  lazy => 1,
+  is  => 'rw',
+);
 
 sub _build_pages_dir ($self) {
   # Default to share/pages relative to project root
@@ -33,8 +40,7 @@ sub build ($self) {
   # Register generate_directory_index method
   $self->register(
     controller => generate_directory_index => sub ($controller, $path) {
-      my $logger = get_logger(__PACKAGE__);
-      $logger->debug("Generating directory index for: $path");
+      $self->logger->debug("Generating directory index for: $path");
 
       $path = path($path) unless ref $path eq 'Path::Tiny';
       $path = $path->parent if $path->basename eq 'index.md';
@@ -43,10 +49,10 @@ sub build ($self) {
 
       foreach my $child ($path->children) {
         next if $child->basename eq 'index.md';
-        $logger->debug("Inspecting: $child");
+        $self->logger->debug("Inspecting: $child");
 
         if ($child->is_dir) {
-          $logger->debug("$child is a directory");
+          $self->logger->debug("$child is a directory");
 
           my $name = $child->basename;
           $name =~ s/_/ /g;
@@ -63,7 +69,7 @@ sub build ($self) {
             };
         }
         elsif ($child->basename =~ /\.md$/) {
-          $logger->debug("$child is a markdown file");
+          $self->logger->debug("$child is a markdown file");
 
           # Parse frontmatter for title
           my $content = $child->slurp_utf8;
@@ -87,7 +93,7 @@ sub build ($self) {
             };
         }
         else {
-          $logger->warn("File with odd extension: $child");
+          $self->logger->warn("File with odd extension: $child");
         }
       }
 
@@ -97,7 +103,7 @@ sub build ($self) {
           || $a->{title} cmp $b->{title}
       } @entries;
 
-      $logger->debug("Generated " . scalar(@entries) . " entries");
+      $self->logger->debug("Generated " . scalar(@entries) . " entries");
       return \@entries;
     }
   );
@@ -120,10 +126,10 @@ WebFramework::Module::AutoIndex - Thunderhorse module for directory indexing
 
     # In your Thunderhorse app
     $self->load_module('AutoIndex');
-    
+
     # In a controller
     my $entries = $self->generate_directory_index($directory_path);
-    
+
     return $self->render('directory.tt', { entries => $entries });
 
 =head1 DESCRIPTION

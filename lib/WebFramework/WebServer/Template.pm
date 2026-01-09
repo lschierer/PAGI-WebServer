@@ -1,10 +1,10 @@
 package PAGI::WebServer::Template;
 use v5.42.0;
 use utf8::all;
-use Moo;
+use Mooish::Base -standard;
+with 'WebFramework::Role::Logger';
 use Template;
 use Path::Tiny;
-use Log::Log4perl qw(get_logger);
 use Encode        qw(encode_utf8);
 
 has tt => (is => 'lazy',);
@@ -35,20 +35,19 @@ sub render {
   my ($self, $template_file, $vars, $options) = @_;
   $options //= {};
 
-  my $logger = get_logger(__PACKAGE__);
-  $logger->debug("Rendering template file: $template_file");
+  $self->logger->debug("Rendering template file: $template_file");
 
   my $output = '';
 
   # If a layout/wrapper is specified, use it
   if ($options->{layout}) {
-    $logger->debug("Using layout: $options->{layout}");
+    $self->logger->debug("Using layout: $options->{layout}");
 
     # First render the content template
     my $content = '';
     unless ($self->tt->process($template_file, $vars, \$content)) {
       my $error = $self->tt->error();
-      $logger->error("Template error: $error");
+      $self->logger->error("Template error: $error");
       die "Template processing failed: $error";
     }
 
@@ -56,7 +55,7 @@ sub render {
     my $layout_vars = { %$vars, content => $content };
     unless ($self->tt->process($options->{layout}, $layout_vars, \$output)) {
       my $error = $self->tt->error();
-      $logger->error("Layout error: $error");
+      $self->logger->error("Layout error: $error");
       die "Layout processing failed: $error";
     }
   }
@@ -64,7 +63,7 @@ sub render {
     # No wrapper, just render the template
     unless ($self->tt->process($template_file, $vars, \$output)) {
       my $error = $self->tt->error();
-      $logger->error("Template error: $error");
+      $self->logger->error("Template error: $error");
       die "Template processing failed: $error";
     }
   }
