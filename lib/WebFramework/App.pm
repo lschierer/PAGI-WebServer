@@ -33,9 +33,7 @@ sub build ($self) {
 
   $self->load_module('^WebFramework::Module::SiteLogo');
   $self->load_module('^WebFramework::Module::Navigation');
-  $self->load_module(
-    '^WebFramework::Module::MarkdownTemplate' => $self->config->{template}
-      // {});
+
   $self->load_module('^WebFramework::Module::AutoIndex');
 
   my $router = $self->router;
@@ -71,11 +69,13 @@ sub run {
 
   my $pagi_stub = $self->SUPER::run();
   my $loop      = IO::Async::Loop->new;
+
   my $host = $self->config->{config}->{server}->{host};
   my $port = $self->config->{config}->{server}->{port};
   my $msg = sprintf('Starting server on host "%s:%s"', $host, $port);
   warn $msg;
   $self->logger->info($msg);
+
   $self->server(PAGI::Server->new(
     app        => $pagi_stub,
     host       => $host,
@@ -83,6 +83,7 @@ sub run {
     access_log => $self->accessLogFH,
     log_level  => $self->env eq 'development' ? 'info' : 'warn',
   ));
+
   $loop->add($self->server);
   $self->server->listen->get;    # Start accepting connections
   $loop->run;

@@ -1,0 +1,160 @@
+package WebFramework::Role::Markdown;
+use v5.42.0;
+use utf8::all;
+use Mooish::Base -role;
+with 'WebFramework::Role::Logger';
+require Path::Tiny;
+
+use Gears::X::Thunderhorse;
+use Gears::Template::TT;
+
+use Encode qw(encode_utf8);
+use Carp;
+require WebFramework::Service::Markdown;
+
+has markdown => (
+  is      => 'ro',
+  default => sub {
+    return WebFramework::Service::Markdown->new;
+  },
+);
+
+has pages_dir => (
+  is      => 'ro',
+  default => sub {
+    my $self = shift;
+    my $markdown_dir = 'share/pages';
+
+      if (my $markdown_dir = $self->app_config->{config}->{markdown_dir}) {
+        $markdown_dir = $markdown_dir;
+      }
+
+    use FindBin;
+    return Path::Tiny::path($FindBin::Bin)->parent->child($markdown_dir);
+  },
+);
+
+sub _build_template ($self) {
+  # Get the template configuration from the nested config structure
+  my $config = {};
+  if($self->can('config')){
+    if (my $app_config = $self->config) {
+      if (my $template_config = $app_config->{config}->{modules}->{Template}) {
+        $config = $template_config;
+      }
+    }
+  }
+   elsif ($self->can('app') && defined($self->app) && blessed($self->app)) {
+    if(my $app_config = $self->app->config){
+      if (my $template_config = $app_config->{config}->{modules}->{Template}) {
+        $config = $template_config;
+      }
+    }
+  }
+
+  # Set default include path if not configured
+  $config->{paths} //= ['templates', ];
+  $self->logger->debug(
+    'markdown template include path: ',
+    join(', ', @{ $config->{paths} })
+  );
+
+  # Debug: log the template configuration
+  use Data::Printer;
+  $self->logger->debug(
+    "Template config in _build_template: " . Data::Printer::np($config));
+
+  require Gears::Template::TT;
+  return Gears::Template::TT->new($config->%*);
+}
+
+sub parse_markdown_frontmatter ($self, $md_file_path) {
+  my $md_file = Path::Tiny::path($md_file_path);
+
+  return unless $md_file->exists;
+  
+  # Fast frontmatter extraction - only read the YAML header
+  my $content = $md_file->slurp_utf8;
+  my ($yaml_text) = $content =~ /^---\s*\n(.*?)\n---/s;
+  
+  return {} unless $yaml_text;
+  
+  # Parse just the YAML frontmatter
+  require YAML::XS;
+  my $frontmatter = eval { YAML::XS::Load($yaml_text) };
+  return $frontmatter || {};
+}
+
+sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
+  my $md_file = ref($md_file_path) ? $md_file_path : path($md_file_path);
+
+  return unless $md_file->exists;
+
+  my ($frontmatter, $content_html) =
+    $self->markdown->render_with_frontmatter($md_file->stringify);
+
+  # Use title from frontmatter or generate from path
+  my $title = $frontmatter->{title};
+  if (!$title) {
+    my $path_for_title = $url_path;
+    $path_for_title =~ s|^/||;
+    $title = $path_for_title;
+    $title =~ s|/| - |g;
+    $title =~ s/[-_]/ /g;
+    $title =~ s/\b(\w)/\U$1/g;
+  }
+
+  my $current_year = (localtime)[5] + 1900;
+  my $sidebar      = $frontmatter->{layout} // 1;
+  $sidebar = 0 if ($sidebar =~ /splash/);
+
+  # Build template vars
+  my $vars = {
+    content      => $content_html,
+    title        => $title,
+    current_year => $current_year,
+    css_files    => ['/css/navigation.css'],
+    %$extra_vars,    # Allow caller to override/extend
+  };
+
+  my $tpl = $self->_build_template;
+  return $tpl->process('page/markdown', $vars,);
+}
+
+sub markdown_string_to_html ($self, $md_content) {
+
+  return unless length($md_content);
+
+  my $content_html = $self->markdown->markdown_string_to_html($md_content);
+
+  return $content_html;
+}
+
+sub retrieve_rendered_markdown ($self, $md_file_path) {
+my $md_file = Path::Tiny::path($md_file_path);
+
+return unless $md_file->exists;
+
+my ($frontmatter, $content_html) =
+  $self->markdown->render_with_frontmatter($md_file->stringify);
+
+return $content_html;
+}
+
+sub find_markdown_file ($self, $url_path) {
+  my $path = $url_path;
+  $path =~ s|^/||;    # Remove leading slash
+
+  # Try exact path first
+  my $md_file = $self->pages_dir->child("$path.md");
+
+  # If not found, try as directory with index.md
+  if (!$md_file->exists) {
+    $md_file = $self->pages_dir->child($path, 'index.md');
+  }
+
+  return $md_file->exists ? $md_file : undef;
+}
+
+1;
+__END__
