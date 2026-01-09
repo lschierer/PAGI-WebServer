@@ -73,8 +73,14 @@ sub build ($self) {
 
           # Parse frontmatter for title
           my $content = $child->slurp_utf8;
-          my ($frontmatter, $markdown_content) =
-            $markdown->parse_frontmatter($content);
+          my $frontmatter;
+          my $markdown_content;
+          if($content){
+            ($frontmatter, $markdown_content) = $markdown->parse_frontmatter($content) if($content);
+          } else {
+            $self->logger->error(sprintf('No content after slurp for "%s"', $child));
+            next;
+          }
 
           my $title = $frontmatter->{title}
             || $self->_titleize($child->basename =~ s/\.md$//r);
