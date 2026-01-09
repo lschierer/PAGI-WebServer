@@ -4,6 +4,7 @@ use Mooish::Base -standard;
 with 'WebFramework::Role::Logger';
 use experimental 'signatures';
 require Log::Handler;
+require WebFramework::Service::Markdown;
 
 use Path::Tiny;
 
@@ -15,7 +16,7 @@ has pages_dir => (
 );
 
 has  markdown => (
-  lazy => 1,
+  default => sub { return WebFramework::Service::Markdown->new; },
   is  => 'rw',
 );
 
@@ -25,17 +26,9 @@ sub _build_pages_dir ($self) {
   return path($FindBin::Bin)->parent->child('share/pages');
 }
 
-sub _build_markdown ($self) {
-  # Get markdown service from the app's loaded modules
-  # This assumes MarkdownTemplate module is also loaded
-  require WebFramework::Service::Markdown;
-  return WebFramework::Service::Markdown->new;
-}
-
 sub build ($self) {
   weaken $self;
   my $pages_dir = $self->pages_dir;
-  my $markdown  = $self->markdown;
 
   # Register generate_directory_index method
   $self->register(
@@ -76,7 +69,7 @@ sub build ($self) {
           my $frontmatter;
           my $markdown_content;
           if($content){
-            ($frontmatter, $markdown_content) = $markdown->parse_frontmatter($content) if($content);
+            ($frontmatter, $markdown_content) = $self->markdown->parse_frontmatter($content) if($content);
           } else {
             $self->logger->error(sprintf('No content after slurp for "%s"', $child));
             next;
