@@ -70,9 +70,13 @@ sub run {
   my $pagi_stub = $self->SUPER::run();
   my $loop      = IO::Async::Loop->new;
 
+  my $conflogmsg = sprintf('WebFramework::App run sees config %s',
+    Data::Printer::np($self->config));
+  $self->logger->debug($conflogmsg);
+  warn $conflogmsg;
   my $host = $self->config->{config}->{server}->{host};
   my $port = $self->config->{config}->{server}->{port};
-  my $msg = sprintf('Starting server on host "%s:%s"', $host, $port);
+  my $msg  = sprintf('Starting server on host "%s:%s"', $host, $port);
   warn $msg;
   $self->logger->info($msg);
 

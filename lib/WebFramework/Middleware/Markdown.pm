@@ -10,39 +10,41 @@ extends 'PAGI::Middleware';
 use Path::Tiny;
 use Future;
 
-
 has app_config => (
-  is => 'ro',
+  is       => 'ro',
   required => 1,
 );
 
 has path => (
-  is => 'ro',
+  is       => 'ro',
   required => 1,
 );
 
 has pass_through => (
-  is => 'ro',
+  is      => 'ro',
   default => 1,
 );
 
 sub wrap ($self, $app) {
   return sub {
     my ($env) = @_;
-    
+
     # Check if this is a real HTTP request
     unless ($env->{REQUEST_METHOD}) {
-      $self->logger->warn("Middleware called without REQUEST_METHOD - skipping");
+      $self->logger->warn(
+        "Middleware called without REQUEST_METHOD - skipping");
       return $app->($env);
     }
-    
-    my $request_path = $env->{PATH_INFO} || '/';
-    my $request_uri = $env->{REQUEST_URI} || 'no REQUEST_URI';
+
+    my $request_path = $env->{PATH_INFO}    || '/';
+    my $request_uri  = $env->{REQUEST_URI}  || 'no REQUEST_URI';
     my $query_string = $env->{QUERY_STRING} || 'no QUERY_STRING';
-    my $method = $env->{REQUEST_METHOD};
-    
-    $self->logger->warn("Middleware: METHOD=$method, PATH_INFO='$request_path', REQUEST_URI='$request_uri', QUERY='$query_string'");
-    
+    my $method       = $env->{REQUEST_METHOD};
+
+    $self->logger->warn(
+"Middleware: METHOD=$method, PATH_INFO='$request_path', REQUEST_URI='$request_uri', QUERY='$query_string'"
+    );
+
     # Convert request path to potential markdown file path
     my $md_file = $self->_path_to_markdown_file($request_path);
 
@@ -81,12 +83,11 @@ sub _path_to_markdown_file ($self, $request_path) {
 
 sub _serve_markdown ($self, $md_file, $env) {
   my $request_path = $env->{PATH_INFO} || '/';
-  my $content = $md_file->slurp_utf8;
+  my $content      = $md_file->slurp_utf8;
 
   # Return a proper PSGI response
   my $response = [
-    200,
-    ['Content-Type' => 'text/html; charset=utf-8'],
+    200, ['Content-Type' => 'text/html; charset=utf-8'],
     ["<pre>$content</pre>"]
   ];
 

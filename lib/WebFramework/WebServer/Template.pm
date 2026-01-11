@@ -5,7 +5,7 @@ use Mooish::Base -standard;
 with 'WebFramework::Role::Logger';
 use Template;
 use Path::Tiny;
-use Encode        qw(encode_utf8);
+use Encode qw(encode_utf8);
 
 has tt => (is => 'lazy',);
 

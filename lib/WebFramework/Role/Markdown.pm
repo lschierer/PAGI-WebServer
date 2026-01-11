@@ -21,12 +21,12 @@ has markdown => (
 has pages_dir => (
   is      => 'ro',
   default => sub {
-    my $self = shift;
+    my $self         = shift;
     my $markdown_dir = 'share/pages';
 
-      if (my $markdown_dir = $self->app_config->{config}->{markdown_dir}) {
-        $markdown_dir = $markdown_dir;
-      }
+    if (my $markdown_dir = $self->app_config->{config}->{markdown_dir}) {
+      $markdown_dir = $markdown_dir;
+    }
 
     use FindBin;
     return Path::Tiny::path($FindBin::Bin)->parent->child($markdown_dir);
@@ -36,15 +36,15 @@ has pages_dir => (
 sub _build_template ($self) {
   # Get the template configuration from the nested config structure
   my $config = {};
-  if($self->can('config')){
+  if ($self->can('config')) {
     if (my $app_config = $self->config) {
       if (my $template_config = $app_config->{config}->{modules}->{Template}) {
         $config = $template_config;
       }
     }
   }
-   elsif ($self->can('app') && defined($self->app) && blessed($self->app)) {
-    if(my $app_config = $self->app->config){
+  elsif ($self->can('app') && defined($self->app) && blessed($self->app)) {
+    if (my $app_config = $self->app->config) {
       if (my $template_config = $app_config->{config}->{modules}->{Template}) {
         $config = $template_config;
       }
@@ -52,11 +52,9 @@ sub _build_template ($self) {
   }
 
   # Set default include path if not configured
-  $config->{paths} //= ['templates', ];
-  $self->logger->debug(
-    'markdown template include path: ',
-    join(', ', @{ $config->{paths} })
-  );
+  $config->{paths} //= ['templates',];
+  $self->logger->debug('markdown template include path: ',
+    join(', ', @{ $config->{paths} }));
 
   # Debug: log the template configuration
   use Data::Printer;
@@ -86,7 +84,7 @@ sub parse_markdown_frontmatter ($self, $md_file_path) {
 }
 
 sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
-  my $md_file = ref($md_file_path) ? $md_file_path : path($md_file_path);
+  my $md_file = Path::Tiny::path($md_file_path);
 
   return unless $md_file->exists;
 
@@ -131,14 +129,14 @@ sub markdown_string_to_html ($self, $md_content) {
 }
 
 sub retrieve_rendered_markdown ($self, $md_file_path) {
-my $md_file = Path::Tiny::path($md_file_path);
+  my $md_file = Path::Tiny::path($md_file_path);
 
-return unless $md_file->exists;
+  return unless $md_file->exists;
 
-my ($frontmatter, $content_html) =
-  $self->markdown->render_with_frontmatter($md_file->stringify);
+  my ($frontmatter, $content_html) =
+    $self->markdown->render_with_frontmatter($md_file->stringify);
 
-return $content_html;
+  return $content_html;
 }
 
 sub find_markdown_file ($self, $url_path) {

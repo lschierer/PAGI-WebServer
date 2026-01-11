@@ -11,13 +11,13 @@ use Path::Tiny;
 extends 'Thunderhorse::Module';
 
 has pages_dir => (
-  is  => 'rw',
+  is   => 'rw',
   lazy => 1,
 );
 
-has  markdown => (
+has markdown => (
   default => sub { return WebFramework::Service::Markdown->new; },
-  is  => 'rw',
+  is      => 'rw',
 );
 
 sub _build_pages_dir ($self) {
@@ -68,10 +68,14 @@ sub build ($self) {
           my $content = $child->slurp_utf8;
           my $frontmatter;
           my $markdown_content;
-          if($content){
-            ($frontmatter, $markdown_content) = $self->markdown->parse_frontmatter($content) if($content);
-          } else {
-            $self->logger->error(sprintf('No content after slurp for "%s"', $child));
+          if ($content) {
+            ($frontmatter, $markdown_content) =
+              $self->markdown->parse_frontmatter($content)
+              if ($content);
+          }
+          else {
+            $self->logger->error(
+              sprintf('No content after slurp for "%s"', $child));
             next;
           }
 
