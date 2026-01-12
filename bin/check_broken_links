@@ -1,0 +1,73 @@
+#!/usr/bin/env perl
+use v5.42;
+use strict;
+use warnings;
+
+use FindBin ();
+use lib "$FindBin::Bin/../lib";
+
+use Getopt::Long qw(GetOptions);
+use Pod::Usage qw(pod2usage);
+
+use LinkCheck::App;
+
+my %opt = (
+  workers          => 8,
+  max_retries      => 3,
+  request_timeout  => 60,
+  inactive_timeout => 30,
+  job_timeout      => 60,
+  max_pages        => 0,   # 0 = unlimited
+  max_external     => 0,   # 0 = unlimited
+  same_host_only   => 1,
+  verbose          => 1,
+);
+
+GetOptions(
+  \%opt,
+  'start|url=s',
+  'workers=i',
+  'max-retries=i',
+  'request-timeout=i',
+  'inactive-timeout=i',
+  'job-timeout=i',
+  'max-pages=i',
+  'max-external=i',
+  'same-host-only!',
+  'verbose+',
+  'help|h',
+) or pod2usage(2);
+
+pod2usage(1) if $opt{help};
+pod2usage("--msg=--start is required", 2) unless $opt{start};
+
+my $checker = LinkCheck::App->new(%opt);
+my $exit = $checker->execute;
+
+exit($exit);
+
+__END__
+
+=head1 NAME
+
+linkcheck - crawl a site and report broken links
+
+=head1 SYNOPSIS
+
+  linkcheck --start https://example.com/ --workers 8
+
+=head1 OPTIONS
+
+  --start, --url              Start URL (required)
+  --workers                   Number of worker processes (default 8)
+  --max-retries               Retries for transient failures (default 3)
+  --request-timeout           Per-request total timeout seconds (default 20)
+  --inactive-timeout          No-response timeout seconds (default 10)
+  --job-timeout               Master job timeout seconds (default 60)
+  --max-pages                 Stop after N internal pages (0 = unlimited)
+  --max-external              Stop after N external checks (0 = unlimited)
+  --same-host-only / --no-same-host-only
+  --verbose                   Increase verbosity (-v -vv)
+  --help                      This help
+
+=cut
