@@ -4,6 +4,7 @@ package WebFramework::Role::Logger;
 use utf8::all;
 use Mooish::Base -role;
 require Path::Tiny;
+require Data::Printer;
 use File::HomeDir::Tiny ();
 use Log::Handler;
 use Carp;
@@ -34,13 +35,20 @@ sub logger {
   return $l;
 }
 
+has debugLogging => (
+  is => 'ro',
+  default => 0,
+);
+
 # Thunderhorse's Logger module only adds a logger to Controllers.
 # Provide a logger to this package as well.
 sub logSetup ($self, $base) {
   my $home   = Path::Tiny::path(File::HomeDir::Tiny::home);
-  my @parts  = split '::', $base;
+  my $key = $self->get_key_from_base($base);
   my $logdir = $home->child(
-    sprintf('var/log/Perl/dist/%s/', join('-', @parts[0 .. $#parts - 1])));
+    sprintf('var/log/Perl/dist/%s/', $key));
+
+  say "logdir is $logdir" if $self->debugLogging;
 
   unless (-d $logdir) {
     $logdir->mkdir({ mode => 0750 });
@@ -64,6 +72,8 @@ sub logSetup ($self, $base) {
     $maxlevel = 'info';
   }
 
+  say "maxlevel is $maxlevel" if $self->debugLogging;
+
   # for future use
   my $logExceptions = '';
   my $outputs       = {
@@ -76,8 +86,23 @@ sub logSetup ($self, $base) {
   };
 
   foreach my $output (keys $outputs->%*) {
+    say sprintf('adding output %s', Data::Printer::np($outputs->{$output})) if $self->debugLogging;
     $self->logger->add($output => $outputs->{$output});
   }
+}
+
+sub get_key_from_base($self, $base){
+  my @parts  = split '::', $base;
+  return join('-', @parts[0 .. $#parts - 1]);
+}
+
+sub ensure_logging ($self, $base = __PACKAGE__) {
+  state %done;                 # per-process hash
+  my $key = $self->get_key_from_base($base);             # or "$base|".$self->env if you want
+  return if $done{$key}++;
+
+  $self->logSetup($base);
+  return;
 }
 
 1;

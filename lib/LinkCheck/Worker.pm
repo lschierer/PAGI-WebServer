@@ -8,11 +8,30 @@ with 'WebFramework::Role::Logger';
 use Future;
 use IO::Async::Loop;
 use Net::Async::HTTP;
-
+use Scalar::Util qw(blessed);
 use Mojo::DOM;
+use Time::HiRes qw(time sleep);
 use URI;
 
-sub run_job ($job) {
+has verbose => (
+  default   => 1,
+  is        => 'ro',
+);
+
+# for use by logging
+has env => (
+  lazy      => 1,
+  default   => sub {
+    my $self = shift;
+    my $e = $self->verbose ? 'development' : 'production';
+    say "env is $e";
+    return $e;
+  },
+  is        => 'ro',
+);
+
+
+sub run_job ($self, $job) {
   my $url  = $job->{url};
   my $mode = $job->{mode}; # internal|external
   my $base = $job->{base_host};
@@ -26,7 +45,36 @@ sub run_job ($job) {
   );
   $loop->add($http);
 
-  my ($html, $page_status, $page_error) = _fetch_with_retries($loop, $http, $url, $job);
+  _throttle_external_host($job, $url);
+  my ($html, $page_status, $page_error, $retry_after);
+
+  eval {
+    $self->logger->info(sprintf('FETCH start mode "%s" for url "%s" on PID %s; ',
+    $job->{mode}, $url, $$,  ));
+    ($html, $page_status, $page_error, $retry_after) =
+      _fetch_with_retries($loop, $http, $url, $job);
+    $self->logger->debug(sprintf(
+    'FETCH complete for "%s" with status %s', $url, $page_status));
+    1;
+  } or do {
+    $page_error  = $@ || "fetch died on PID $$";
+    $page_status = 0;
+  };
+
+  _release_external_host_slot($job, $url);
+
+  if (($job->{mode} // '') eq 'external' && defined $retry_after) {
+    my $u    = URI->new($url);
+    my $host = lc($u->host // '');
+    if ($host && $job->{host_lock} && $job->{host_next_time}) {
+      $job->{host_lock}->lock;
+      my $now = time;
+      my $cur = $job->{host_next_time}->{$host} // 0;
+      my $new = $now + $retry_after;
+      $job->{host_next_time}->{$host} = $new if $new > $cur;
+      $job->{host_lock}->unlock;
+    }
+  }
 
   my @found_internal;
   my @found_external;
@@ -52,9 +100,10 @@ sub run_job ($job) {
   my %anchors;
   my %anchor_refs; # base -> frag -> count
 
-  if (length $html) {
+  if ($job->{mode} eq 'internal' && length $html) {
     my $page_uri = URI->new($url);
     my $dom = Mojo::DOM->new($html);
+    $self->logger->info(sprintf('parsing page "%s" for more to check', $url));
 
     my $anchors = extract_anchors($dom);
     %anchors = %$anchors if $anchors;
@@ -174,6 +223,68 @@ sub extract_anchors ($dom) {
   return \%a;
 }
 
+sub _throttle_external_host ($job, $url) {
+  return unless ($job->{mode} // '') eq 'external';
+
+  my $u    = URI->new($url);
+  my $host = lc($u->host // '');
+  return unless length $host;
+
+  my $min_interval = $job->{external_min_interval} // 1.0;
+  my $jitter       = $job->{external_jitter} // 0.0;
+  my $slots        = $job->{external_host_slots} // 1;
+
+  my $lock     = $job->{host_lock}      or return;
+  my $next_h   = $job->{host_next_time} or return;
+  my $inflight = $job->{host_inflight}  or return;
+
+  while (1) {
+    my $wait = 0;
+
+    $lock->lock;
+
+    my $now   = time;
+    my $next  = $next_h->{$host} // 0;
+    my $in    = $inflight->{$host} // 0;
+
+    if ($in >= $slots) {
+      # too many concurrent requests to this host: wait a bit
+      $wait = 0.10;
+    } else {
+      $wait = $next > $now ? ($next - $now) : 0;
+      if ($wait <= 0) {
+        # claim a slot and set next-allowed timestamp
+        $inflight->{$host} = $in + 1;
+
+        my $extra = $jitter ? rand($jitter) : 0;
+        $next_h->{$host} = $now + $min_interval + $extra;
+
+        $lock->unlock;
+        return;
+      }
+    }
+
+    $lock->unlock;
+    sleep($wait > 0 ? $wait : 0.05);
+  }
+}
+
+sub _release_external_host_slot ($job, $url) {
+  return unless ($job->{mode} // '') eq 'external';
+
+  my $u    = URI->new($url);
+  my $host = lc($u->host // '');
+  return unless length $host;
+
+  my $lock     = $job->{host_lock}     or return;
+  my $inflight = $job->{host_inflight} or return;
+
+  $lock->lock;
+  my $in = $inflight->{$host} // 0;
+  $inflight->{$host} = $in > 0 ? ($in - 1) : 0;
+  $lock->unlock;
+}
+
 sub _normalize_url ($u) {
   my $uri = URI->new($u);
   return undef unless ($uri->scheme // '') =~ /^https?$/;
@@ -203,6 +314,7 @@ sub _fetch_with_retries ($loop, $http, $url, $job) {
   my $last_status;
 
   for (my $try = 1; $try <= $job->{max_retries}; $try++) {
+
     my $req_f = $http->GET(
       $url,
       headers => [
@@ -210,37 +322,31 @@ sub _fetch_with_retries ($loop, $http, $url, $job) {
       ],
     );
 
-    my $inactive_f = $loop->delay_future(after => $job->{inactive_timeout})
-      ->then(sub {
+    my $deadline = time + ($job->{inactive_timeout} // 30);
+
+    # Drive the loop until the request completes or deadline hits
+    while (!$req_f->is_ready) {
+      $loop->loop_once(0.05);
+
+      if (time >= $deadline) {
         $req_f->cancel;
-        Future->fail("inactive timeout after $job->{inactive_timeout}s");
-      });
+        last;
+      }
+    }
 
-    my $done = Future->wait_any($req_f, $inactive_f);
-
-    my ($winner, @vals);
+    my $resp;
     eval {
-      ($winner, @vals) = $loop->await($done);
+      ($resp) = $req_f->get;   # will die on cancel/fail
       1;
     } or do {
-      $last_err = $@ || "unknown error";
+      my $err = $@ || "request failed";
+      $last_err = (time >= $deadline)
+        ? "inactive timeout after $job->{inactive_timeout}s"
+        : $err;
       $last_status = 0;
       _backoff($loop, $try);
       next;
     };
-
-    # If the inactivity future won, it should have failed; but handle defensively.
-    if ($winner != $req_f) {
-      # winner is the timeout future (or something else)
-      my $err = eval { $winner->failure } || "request canceled/timeout";
-      $last_err = $err;
-      $last_status = 0;
-      _backoff($loop, $try);
-      next;
-    }
-
-    # req_f won; its first value should be an HTTP::Response
-    my ($resp) = @vals;
 
     if ($resp && $resp->is_success) {
       my $ct = $resp->content_type // '';
@@ -253,9 +359,18 @@ sub _fetch_with_retries ($loop, $http, $url, $job) {
     $last_status = $resp ? $resp->code : 0;
     $last_err    = $resp ? ("HTTP " . $resp->code) : "no response";
 
-    my %retryable = map { $_ => 1 } qw(408 425 429 500 502 503 504);
-    last if $resp && !$retryable{$resp->code};
+    if ($resp && $resp->code == 429) {
+      my $ra = $resp->header('Retry-After');
+      my $retry_after = ($ra && $ra =~ /^\d+$/) ? $ra : undef;
 
+      $last_status = 429;
+      $last_err    = "HTTP 429";
+
+      return (undef, 429, $last_err, $retry_after);
+    }
+
+    my %retryable = map { $_ => 1 } qw(408 425 500 502 503 504);
+    last if $resp && !$retryable{$resp->code};
     _backoff($loop, $try);
   }
 
@@ -265,7 +380,11 @@ sub _fetch_with_retries ($loop, $http, $url, $job) {
 sub _backoff ($loop, $try) {
   my $t = 0.25 * (2 ** ($try - 1));
   $t = 4 if $t > 4;
-  $loop->await($loop->delay_future(after => $t));
+
+  my $until = time + $t;
+  while (time < $until) {
+    $loop->loop_once(0.05);
+  }
 }
 
 1;

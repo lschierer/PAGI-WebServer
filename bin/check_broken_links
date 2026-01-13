@@ -20,7 +20,7 @@ my %opt = (
   max_pages        => 0,   # 0 = unlimited
   max_external     => 0,   # 0 = unlimited
   same_host_only   => 1,
-  verbose          => 1,
+  verbose          => 0,
 );
 
 GetOptions(
