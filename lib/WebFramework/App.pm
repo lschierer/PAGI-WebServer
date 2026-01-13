@@ -74,14 +74,17 @@ sub run {
     Data::Printer::np($self->config));
   $self->logger->debug($conflogmsg);
   warn $conflogmsg;
+
   my $host = $self->config->{config}->{server}->{host};
   my $port = $self->config->{config}->{server}->{port};
+  my $workers = $self->config->{config}->{server}->{worker_threads} // 2;
   my $msg  = sprintf('Starting server on host "%s:%s"', $host, $port);
   warn $msg;
   $self->logger->info($msg);
 
   $self->server(PAGI::Server->new(
     app        => $pagi_stub,
+    workers    => $workers,
     host       => $host,
     port       => $port,
     access_log => $self->accessLogFH,

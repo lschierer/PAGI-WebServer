@@ -23,7 +23,6 @@ my $builder = Module::Build->new(
     'MCE::Mutex'        => '0',
     'MCE::Queue'        => '0',
     'MCE::Shared'       => '0',
-    'Mojo::Dom'         => '0',
     'Mooish::Base'      => '0',
     'Net::Async::HTTP'  => '0',
     'PAGI'              => '0',
@@ -62,8 +61,10 @@ my $builder = Module::Build->new(
     'Pod::Weaver::Section::Leftovers'               => '0',
     'Log::Any::Adapter'                             => '0',
   },
+  # Mojolicious to provide Mojo::DOM
   test_requires => {
     'Test2::V0' => '0',
+    'Mojolicious'       => '0',
   },
   add_to_cleanup     => ['PAGI-WebServer-*'],
   create_makefile_pl => 'traditional',
