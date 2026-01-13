@@ -36,7 +36,7 @@ sub logger {
 }
 
 has debugLogging => (
-  is => 'ro',
+  is      => 'ro',
   default => 0,
 );
 
@@ -44,9 +44,8 @@ has debugLogging => (
 # Provide a logger to this package as well.
 sub logSetup ($self, $base) {
   my $home   = Path::Tiny::path(File::HomeDir::Tiny::home);
-  my $key = $self->get_key_from_base($base);
-  my $logdir = $home->child(
-    sprintf('var/log/Perl/dist/%s/', $key));
+  my $key    = $self->get_key_from_base($base);
+  my $logdir = $home->child(sprintf('var/log/Perl/dist/%s/', $key));
 
   say "logdir is $logdir" if $self->debugLogging;
 
@@ -86,19 +85,21 @@ sub logSetup ($self, $base) {
   };
 
   foreach my $output (keys $outputs->%*) {
-    say sprintf('adding output %s', Data::Printer::np($outputs->{$output})) if $self->debugLogging;
+    say sprintf('adding output %s', Data::Printer::np($outputs->{$output}))
+      if $self->debugLogging;
     $self->logger->add($output => $outputs->{$output});
   }
 }
 
-sub get_key_from_base($self, $base){
-  my @parts  = split '::', $base;
+sub get_key_from_base($self, $base) {
+  my @parts = split '::', $base;
   return join('-', @parts[0 .. $#parts - 1]);
 }
 
 sub ensure_logging ($self, $base = __PACKAGE__) {
-  state %done;                 # per-process hash
-  my $key = $self->get_key_from_base($base);             # or "$base|".$self->env if you want
+  state %done;                          # per-process hash
+  my $key =
+    $self->get_key_from_base($base);    # or "$base|".$self->env if you want
   return if $done{$key}++;
 
   $self->logSetup($base);
