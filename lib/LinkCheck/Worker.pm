@@ -92,6 +92,7 @@ sub run_job ($self, $job) {
     return {
       mode           => $mode,
       page_url       => $url,
+      source_page    => $job->{source_page},
       found_internal => [],
       found_external => [],
       broken         => \%broken,
@@ -366,7 +367,7 @@ sub _fetch_with_retries ($loop, $http, $url, $job) {
       next;
     };
 
-    if ($resp && $resp->is_success) {
+    if ($resp && ($resp->is_success || $resp->code == 403)) {
       my $ct = $resp->content_type // '';
       my $body =
         ($ct =~ m{text/html|application/xhtml\+xml|image/svg\+xml}i)

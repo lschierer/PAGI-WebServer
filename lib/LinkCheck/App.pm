@@ -5,12 +5,19 @@ use utf8::all;
 use Mooish::Base -standard;
 with 'WebFramework::Role::Logger';
 
-use MCE;
-use MCE::Queue;
-require MCE::Shared;
 require MCE::Mutex;
-use URI;
+require MCE::Shared;
+require Future::HTTP;
+use MCE::Loop;
+use MCE::Queue;
+use MCE;
+use Sereal::Encoder;
+use Sereal::Decoder;
 use Time::HiRes qw(time);
+use URI;
+use XML::LibXML;
+use XML::LibXML::XPathContext;
+
 use Carp;
 
 use LinkCheck::Worker ();
@@ -18,9 +25,11 @@ use LinkCheck::Worker ();
 has start => (
   required => 1,
   is       => 'rw',
+  coerce   => sub {
+    my $val = shift;
+    return ref($val) eq 'URI' ? $val : URI->new($val);
+  },
 );
-
-has base_host => (is => 'rw',);
 
 has workers => (
   is      => 'ro',
@@ -79,55 +88,45 @@ has env => (
   is => 'ro',
 );
 
+
+has encoder => (
+  default => sub { return Sereal::Encoder->new();},
+  is      => 'ro',
+);
+
+has decoder => (
+  default => sub { return Sereal::Decoder->new();},
+  is      => 'ro',
+);
+
+#### internal variables
+
+has base_host => (is => 'rw',);
+
+has base_url => (is => 'rw');
+
+
+has _internal_pending_count => (
+  default   => 0,
+  is        => 'rw',
+);
+
 has _internal_q => (
   default => sub {
-    return MCE::Queue->new();
+    return MCE::Shared->hash();
   },
   is => 'rw',
 );
 
 has _external_q => (
   default => sub {
-    return MCE::Queue->new();
+    {}
   },
   is => 'rw',
 );
 
-has _scheduled_verify => (
-  default => sub { {} },
-  is      => 'rw',
-);
-
-has _seen => (
-  default => sub { {} },
-  is      => 'rw',
-);
-
-has _reached_internal => (default => sub { {} }, is => 'rw');
-has _verify_only      => (default => sub { {} }, is => 'rw');
-
-has _ok => (
-  default => sub { {} },
-  is      => 'rw',
-);
-
-has _anchors_for => (
-  default => sub { {} },
-  is      => 'rw',
-);
-
-has _pending_anchor_refs => (
-  default => sub { {} },
-  is      => 'rw',
-);
-
 has _broken => (
   default => sub { {} },
-  is      => 'rw',
-);
-
-has _job_seq => (
-  default => 0,
   is      => 'rw',
 );
 
@@ -140,207 +139,262 @@ has external_jitter => (is => 'ro', default => 0.2);  # random 0..jitter seconds
 has external_host_slots => (is => 'ro', default => 1)
   ;    # max concurrent requests per host (usually 1)
 
-has _host_lock      => (is => 'rw');
+has _host_lock      => (
+  default   => sub { return MCE::Mutex->new; },
+  is        => 'rw',
+);
+
 has _host_next_time => (is => 'rw');
 has _host_inflight  => (is => 'rw');
 
-has _stats => (
-  is      => 'rw',
-  default => sub {
+# Do not access directly, access via
+# $self->_new_queue_item;
+has _queue_item => (
+  default   => sub {
     return {
-      internal_done => 0,
-      external_done => 0,
-    };
-  }
+      pending_internal_links  => [],
+      pending_external_links  => [],
+      possible_anchors        => [],
+      pending_anchor_refs     => [],
+      successfull_internal_links  => [],
+      successfull_external_links  => [],
+      successfull_anchor_refs     => [],
+      broken_internal_links  => [],
+      broken_external_links  => [],
+      broken_anchors         => [],
+      broken_anchor_refs     => [],
+      checked                => 0,
+    }
+  },
+  is => 'ro',
 );
 
+
+# entry point
 sub execute ($self) {
   $self->ensure_logging(__PACKAGE__);
   $self->start(URI->new($self->start));
   $self->base_host(lc $self->start->host);
-  $self->_enqueue_internal($self->start->as_string);
 
-  MCE::Shared->init;
-  $self->_host_lock(MCE::Mutex->new);
-  $self->_host_next_time(MCE::Shared->hash);    # host => epoch seconds
-  $self->_host_inflight(MCE::Shared->hash);
+  $self->base_url($self->start->clone);
+  $self->base_url->fragment(undef);
+  $self->base_url->query(undef);
+  $self->base_url->path(undef);
+  $self->logger->debug("base host is " . $self->base_host);
+  say "About to store queue item for: " . $self->start->as_string;
+  say "Queue item type: " . ref($self->_new_queue_item());
+  $self->_internal_q->{$self->start->as_string} = $self->_new_queue_item();
 
-  $self->_inflight(MCE::Shared->scalar(0));
-  $self->_stop_sent(MCE::Shared->scalar(0));
+  # Extract constructor params - don't capture $self in closure
+  my $start_url = $self->start->as_string;
+  my $base_url = $self->base_url->as_string;
+  my $base_host = $self->base_host;
+  my $workers = $self->workers;
+  my $max_retries = $self->max_retries;
+  my $request_timeout = $self->request_timeout;
+  my $inactive_timeout = $self->inactive_timeout;
+  my $job_timeout = $self->job_timeout;
+  my $max_pages = $self->max_pages;
+  my $max_external = $self->max_external;
+  my $same_host_only = $self->same_host_only;
+  my $verbose = $self->verbose;
+  my $internal_q = $self->_internal_q;
+  my $host_lock = $self->_host_lock;
 
   my $mce = MCE->new(
-    max_workers => $self->workers,
-    user_func   => sub { $self->_mce_worker(@_) },
-    gather      => sub { $self->_mce_gather(@_) },
+     max_workers  => $workers,
+     user_func    => sub {
+      my ($mce) = @_;
+
+      # Create a fresh instance in this worker process
+      my $worker_app = LinkCheck::App->new(
+         start => $start_url,
+         workers => 1,
+         max_retries => $max_retries,
+         request_timeout => $request_timeout,
+         inactive_timeout => $inactive_timeout,
+         job_timeout => $job_timeout,
+         max_pages => $max_pages,
+         max_external => $max_external,
+         same_host_only => $same_host_only,
+         verbose => $verbose,
+      );
+
+      # Set base_url and base_host that were computed in main instance
+      $worker_app->base_url(URI->new($base_url));
+      $worker_app->base_host($base_host);
+
+      # Use the shared queue and lock from the parent
+      $worker_app->_internal_q($internal_q);
+      $worker_app->_host_lock($host_lock);
+
+      $worker_app->mce_user_func($mce, $internal_q);
+     },
+     max_retries  => $max_retries,
+  );
+  MCE::Shared->start();
+
+   $mce->run;
+}
+
+sub mce_user_func ($self, $mce, $internal_q) {
+  my ( $pid, $wid ) = ( MCE->pid, MCE->wid );
+  my $key;
+  my $no_work_count = 0;
+  my @in_progress;
+  do {
+    $self->_host_lock->lock;
+
+    my @all_keys = $internal_q->keys();
+    my @unchecked = grep { $internal_q->{$_}->{state} eq 'unchecked' } @all_keys;
+    @in_progress = grep { $internal_q->{$_}->{state} eq 'in-progress' } @all_keys;
+
+    $key = $unchecked[0];
+    if ($key) {
+      $internal_q->{$key}->{state} = 'in-progress';
+      $no_work_count = 0;
+      say "pid $pid; wid $wid; claimed key $key";
+    } elsif (@in_progress) {
+      # Other workers are still processing, wait for them to add more work
+      $no_work_count = 0;
+      say "pid $pid; wid $wid; no unchecked keys, but work in progress, will retry";
+    } else {
+      # No unchecked, no in-progress = truly done
+      $no_work_count++;
+      say "pid $pid; wid $wid; no work found (count: $no_work_count)";
+    }
+
+    $self->_host_lock->unlock;
+
+    if ($key) {
+      $self->get_internal_url($key);
+    } elsif (@in_progress || $no_work_count < 3) {
+      # Brief sleep to avoid spinning
+      select(undef, undef, undef, 0.1);
+    }
+  } while ($key || @in_progress || $no_work_count < 3);
+
+  say "pid $pid; wid $wid; exiting - no more work";
+}
+
+sub _new_queue_item ($self) {
+  $self->_internal_pending_count($self->_internal_pending_count + 1);
+  # Return a plain hash - don't reference $self->_queue_item which has code refs
+  return {
+    pending_internal_links     => [],
+    pending_external_links     => [],
+    possible_anchors           => [],
+    pending_anchor_refs        => [],
+    successfull_internal_links => [],
+    successfull_external_links => [],
+    successfull_anchor_refs    => [],
+    broken_internal_links      => [],
+    broken_external_links      => [],
+    broken_anchors             => [],
+    broken_anchor_refs         => [],
+    state                      => 'unchecked',
+  };
+}
+
+
+sub get_internal_url($self, $url){
+  return unless($url &&  length($url));
+  unless($self->_internal_q->exists($url)){
+    my $errmsg = "no internal queue entry for $url";
+    $self->logger->error($errmsg);
+    warn($errmsg);
+    return;
+  }
+  return if($self->_internal_q->{$url}->{state} eq 'checked');
+  say "getting internal url $url";
+  my $ua = Future::HTTP->new();
+  my $res = $ua->http_get($url)->then(sub {
+      my( $body, $data ) = @_;
+      my $extracted = $self->process_url($url, $body, $data);
+
+      # Store the extracted data (plain arrays/strings only)
+      $self->_internal_q->{$url}->{pending_internal_links} = $extracted->{internal_links};
+      $self->_internal_q->{$url}->{pending_external_links} = $extracted->{external_links};
+      $self->_internal_q->{$url}->{pending_anchor_refs} = $extracted->{anchor_refs};
+      $self->_internal_q->{$url}->{possible_anchors} = $extracted->{anchors};
+
+      foreach my $link ( @{ $extracted->{internal_links} }){
+        if($link =~ /^\//){
+          $link = sprintf('%s%s', $self->base_url, $link);
+        }
+        my $uri = URI->new($link);
+        my $host = $uri->clone;
+        $host->fragment(undef);  # Remove fragment (#anchor)
+        $host->query(undef);     # Remove query string (?param=value)
+        my $base_url = $host->as_string;
+        unless(exists $self->_internal_q->{$base_url}){
+          $self->_internal_q->{$base_url} = $self->_new_queue_item;
+        }
+      }
+  })->get();
+  $self->_internal_q->{$url}->{state} = 'checked';
+}
+
+sub process_url ($self, $url, $body, $data) {
+  local(*STDERR);
+  open STDERR, '>>', File::Spec->devnull();
+  my $dom = XML::LibXML->load_xml(
+    string => $body,
+    recover   => 1,
+    suppress_errors => 1,
   );
 
-  $mce->process([(1) x $self->workers]);
+  my $host = $self->base_host;
+  unless($self->start->host_port =~ /(?:80|443)$/ ){
+    $host = sprintf('%s:%s', $host, $self->start->port);
+  }
+  $self->logger->debug("host is $host");
 
-  $self->_finalize_pending_anchors;
-  $self->_print_report;
+  my @all_links = $dom->findnodes('//a[@href]');
+  $self->logger->debug(sprintf('Found %s total <a> tags with href', scalar(@all_links)));
 
-  return (keys %{ $self->{_broken} }) ? 2 : 0;
-}
+  my @internal_links;
+  my @external_links;
+  my @anchor_refs;
+  my @anchors;
 
-sub _mce_worker ($self, $mce, $chunk_ref, $chunk_id) {
-  $chunk_id //= 0;
+  foreach my $linknode (@all_links) {
+    my $href = $linknode->getAttribute('href');
+    next unless $href;
 
-  my $internal_q = $self->_internal_q;
-  my $external_q = $self->_external_q;
-  my $inflight   = $self->_inflight;
-
-  while (1) {
-    my ($u, $mode);
-
-    # Prefer internal; block briefly so workers don't exit too early
-    $u = $internal_q->dequeue_timed(0.25);
-    if (defined $u) {
-      $mode = 'internal';
+    if ($href =~ m{^#} ) {
+      $self->logger->debug("  -> anchor: $href");
+      push @anchor_refs, $href;
+    }
+    elsif ($href =~ m{^/} || $href =~ /\Q$host\E/) {
+      $self->logger->debug("  -> internal: $href");
+      push @internal_links, $href;
     }
     else {
-      $u = $external_q->dequeue_timed(0.25);
-      next unless defined $u;
-      $mode = 'external';
-    }
-
-    last if $u eq '__STOP__';
-
-    $inflight->incr;
-
-    my $job = { url => $u, mode => $mode };
-
-    my $res;
-    eval {
-      local $SIG{ALRM} = sub { die "job alarm timeout\n" };
-      alarm($self->job_timeout);
-
-      state $worker_obj = LinkCheck::Worker->new(env => $self->env,);
-      $worker_obj->ensure_logging('LinkCheck::Worker');
-      $res = $worker_obj->run_job({
-        %$job,
-        base_host             => $self->base_host,
-        max_retries           => $self->max_retries,
-        request_timeout       => $self->request_timeout,
-        inactive_timeout      => $self->inactive_timeout,
-        same_host_only        => $self->same_host_only ? 1 : 0,
-        external_min_interval => $self->external_min_interval,
-        external_jitter       => $self->external_jitter,
-        external_host_slots   => $self->external_host_slots,
-        host_lock             => $self->_host_lock,
-        host_next_time        => $self->_host_next_time,
-        host_inflight         => $self->_host_inflight,
-        verbose               => $self->verbose,
-
-      });
-
-      alarm(0);
-      1;
-    } or do {
-      alarm(0);
-      my $err = $@ || 'unknown worker error';
-      $res = {
-        mode           => $mode,
-        page_url       => $u,
-        found_internal => [],
-        found_external => [],
-        anchors        => {},
-        anchor_refs    => [],
-        broken         => {
-          $u => {
-            status      => 0,
-            error       => "worker exception: $err",
-            occurrences => 1
-          }
-        },
-      };
-    };
-
-    MCE->gather($chunk_id, $res);
-  }
-
-  return;
-}
-
-sub _mce_gather ($self, @args) {
-  my ($mce, $chunk_id, $res) = @args;
-
-  # Some MCE versions call gather($chunk_id, $data)
-  if (ref($mce) ne 'MCE') {
-    ($chunk_id, $res) = @args;
-  }
-
-  return unless $res;
-
-  my $internal_q = $self->_internal_q;
-  my $external_q = $self->_external_q;
-  my $inflight   = $self->_inflight;
-  my $stop_sent  = $self->_stop_sent;
-
-  $self->_merge_result($res);
-
-  $inflight->decr;
-
-  # once internal drained, promote anchor bases etc.
-  if ($internal_q->pending == 0) {
-    $self->_promote_pending_anchor_bases;
-  }
-
-  # stop condition: nothing queued + nothing inflight + no pending anchor refs
-  if (!$stop_sent->get
-    && $internal_q->pending == 0
-    && $external_q->pending == 0
-    && $inflight->get == 0
-    && !keys %{ $self->{_pending_anchor_refs} }) {
-
-    $stop_sent->set(1);
-
-    # Send stop sentinels so workers exit cleanly
-    $internal_q->enqueue(('__STOP__') x $self->workers);
-    $external_q->enqueue(('__STOP__') x $self->workers);
-  }
-
-  return;
-}
-
-sub _next_job ($self) {
-  # stop conditions
-  if ( $self->{max_pages}
-    && $self->{_stats}{internal_done} >= $self->{max_pages}) {
-    # no more internal jobs
-  }
-  else {
-    if (my $u = $self->{_internal_q}->dequeue_nb) {
-      return { url => $u, mode => 'internal' };
+      push @external_links, $href;
+      $self->logger->debug("  -> external: $href ");
     }
   }
 
-  if ( $self->{max_external}
-    && $self->{_stats}{external_done} >= $self->{max_external}) {
-    return undef;
+  my @elements_with_id = $dom->findnodes('//*[@id]');
+  $self->logger->debug(sprintf('Found %s elements with id attribute', scalar(@elements_with_id)));
+
+  foreach my $element (@elements_with_id) {
+    my $id = $element->getAttribute('id');
+    if ($id) {
+      $self->logger->debug("  -> anchor target: #$id");
+      push @anchors, $id;
+    }
   }
 
-  if (my $u = $self->{_external_q}->dequeue_nb) {
-    return { url => $u, mode => 'external' };
-  }
+  $self->logger->info(sprintf('Total anchor targets found: %s', scalar(@anchors)));
 
-  return undef;
-}
-
-sub _promote_pending_anchor_bases ($self) {
-  state %scheduled;
-
-  for my $base (keys %{ $self->{_pending_anchor_refs} }) {
-    next
-      if exists $self->{_anchors_for}{$base}; # already fetched & parsed anchors
-    next if $scheduled{$base}++;
-
-    # mark that we only pulled this because of pending anchor checks
-    $self->{_verify_only}{$base} = 1
-      unless $self->{_reached_internal}{$base};
-
-    # IMPORTANT: bypass %seen gating if needed
-    $self->{_external_q}->enqueue($base);
-  }
+  return {
+    internal_links => \@internal_links,
+    external_links => \@external_links,
+    anchor_refs => \@anchor_refs,
+    anchors => \@anchors,
+  };
 }
 
 sub _done ($self) {
@@ -349,243 +403,6 @@ sub _done ($self) {
     && $self->{_external_q}->pending == 0;
 }
 
-# ------------------------
-# State helpers
-# ------------------------
-
-sub _normalize_url ($self, $u) {
-  my $uri = URI->new($u);
-  return undef unless ($uri->scheme // '') =~ /^https?$/;
-  $uri->fragment(undef);
-  $uri->host(lc $uri->host) if $uri->host;
-
-  if ( ($uri->scheme eq 'http' && ($uri->port // 80) == 80)
-    || ($uri->scheme eq 'https' && ($uri->port // 443) == 443)) {
-    $uri->port(undef);
-  }
-
-  return $uri->as_string;
-}
-
-sub _enqueue_internal ($self, $u) {
-  my $n = $self->_normalize_url($u) // return;
-
-  $self->{_reached_internal}{$n} = 1;    # <- add this
-
-  return if $self->{_seen}{$n}++;
-  $self->{_internal_q}->enqueue($n);
-}
-
-sub _enqueue_external ($self, $u) {
-  my $n = $self->_normalize_url($u) // return;
-  return if $self->{_seen}{$n}++;
-  $self->{_external_q}->enqueue($n);
-}
-
-sub _mark_broken ($self, %args) {
-  my $link = $args{link};
-  my $page = $args{page};
-
-  $self->{_broken}{$link}{status} //= $args{status};
-  $self->{_broken}{$link}{error}  //= $args{error};
-  $self->{_broken}{$link}{pages}{$page} += ($args{occurrences} // 1);
-}
-
-sub _merge_result ($self, $res) {
-  my $page = $res->{page_url};
-
-  if ($res->{mode} eq 'internal') {
-    $self->{_stats}{internal_done}++;
-  }
-  else {
-    $self->{_stats}{external_done}++;
-  }
-
-  # Store anchors for this fetched page ASAP (so pending refs can resolve)
-  if ($res->{anchors} && ref($res->{anchors}) eq 'HASH') {
-    $self->_store_anchors($page, $res->{anchors});
-  }
-
- # Record anchor refs found on this page (resolve now if possible, else pending)
-  if ($res->{anchor_refs} && ref($res->{anchor_refs}) eq 'ARRAY') {
-    for my $r (@{ $res->{anchor_refs} }) {
-      $self->_record_anchor_ref($page, $r->{base}, $r->{frag},
-        $r->{count} // 1);
-    }
-  }
-
-  # page ok?
-  if (!$res->{broken}{$page}) {
-    $self->{_ok}{$page} = 1;
-  }
-
-  # Merge broken links found on that page
-  for my $link (keys %{ $res->{broken} }) {
-    my $b = $res->{broken}{$link};
-    $self->_mark_broken(
-      link        => $link,
-      page        => $page,
-      status      => $b->{status}      // 0,
-      error       => $b->{error}       // 'unknown error',
-      occurrences => $b->{occurrences} // 1,
-    );
-  }
-
-  if ($self->{_verify_only}{$page}) {
-    if ($res->{broken}{$page}) {
-      # page didn't exist / unreachable
-      $self->_mark_broken(
-        link   => $page,
-        page   => '(nav)',
-        status => $res->{broken}{$page}{status} // 0,
-        error  =>
-"NAV: referenced page not reachable/existing ($res->{broken}{$page}{error})",
-        occurrences => 1,
-      );
-    }
-    else {
-      # page exists but was only discovered via fragment verification
-      $self->_mark_broken(
-        link   => $page,
-        page   => '(nav)',
-        status => 0,
-        error  =>
-"NAV: orphaned internal page (exists but not reachable from start crawl)",
-        occurrences => 1,
-      );
-    }
-  }
-
-  # Enqueue newly found links
-  if (($res->{mode} // '') eq 'internal') {
-    for my $u (@{ $res->{found_internal} // [] }) {
-      $self->_enqueue_internal($u);
-    }
-    for my $u (@{ $res->{found_external} // [] }) {
-      $self->_enqueue_external($u);
-    }
-  }
-}
-
-sub _record_anchor_ref ($self, $page, $base, $frag, $count = 1) {
-  return unless defined $base && defined $frag && length $frag;
-
-  # if we already know anchors for base, resolve immediately
-  if (exists $self->{_anchors_for}{$base}) {
-    if (exists $self->{_anchors_for}{$base}{$frag}) {
-      return;    # ok
-    }
-
-    # base fetched but anchor missing => broken
-    $self->_mark_broken(
-      link        => "$base#$frag",
-      page        => $page,
-      status      => 0,
-      error       => "missing fragment #$frag",
-      occurrences => $count,
-    );
-    return;
-  }
-
-  # base not fetched yet => pending
-  $self->{_pending_anchor_refs}{$base}{$frag}{$page} += $count;
-}
-
-sub _store_anchors ($self, $base, $anchors) {
-  return unless defined $base && $anchors && ref($anchors) eq 'HASH';
-
-  $self->{_anchors_for}{$base} = $anchors;
-
-  # resolve any pending refs now that we know anchors
-  my $pending = delete $self->{_pending_anchor_refs}{$base} // return;
-
-  for my $frag (keys %$pending) {
-    for my $page (keys %{ $pending->{$frag} }) {
-      my $count = $pending->{$frag}{$page};
-
-      if (exists $anchors->{$frag}) {
-        next;    # ok
-      }
-
-      $self->_mark_broken(
-        link        => "$base#$frag",
-        page        => $page,
-        status      => 0,
-        error       => "missing fragment #$frag",
-        occurrences => $count,
-      );
-    }
-  }
-}
-
-sub _finalize_pending_anchors ($self) {
-  for my $base (keys %{ $self->{_pending_anchor_refs} }) {
-    for my $frag (keys %{ $self->{_pending_anchor_refs}{$base} }) {
-      for my $page (keys %{ $self->{_pending_anchor_refs}{$base}{$frag} }) {
-        my $count = $self->{_pending_anchor_refs}{$base}{$frag}{$page};
-
-        # At this point we never fetched $base, so we can't know.
-        # You can choose policy: treat as broken or "unverified".
-        $self->_mark_broken(
-          link        => "$base#$frag",
-          page        => $page,
-          status      => 0,
-          error       => "fragment unverified (base not fetched): $base",
-          occurrences => $count,
-        );
-      }
-    }
-  }
-
-  $self->{_pending_anchor_refs} = {};
-}
-
-sub _broken_by_page ($self) {
-  my %by_page;
-
-  for my $link (keys %{ $self->{_broken} }) {
-    my $e = $self->{_broken}{$link};
-
-    for my $page (keys %{ $e->{pages} // {} }) {
-      $by_page{$page}{$link} = {
-        occurrences => $e->{pages}{$page},
-        status      => $e->{status} // 0,
-        error       => $e->{error}  // '',
-      };
-    }
-  }
-
-  return \%by_page;
-}
-
-sub _print_report ($self) {
-  $self->logger->notice("Checked internal: $self->{_stats}{internal_done}");
-  $self->logger->notice("Checked external: $self->{_stats}{external_done}");
-  $self->logger->warn("Broken links: " . scalar(keys %{ $self->{_broken} }));
-
-  # View 1: by page (best for fixing site content)
-  my $by_page = $self->_broken_by_page;
-
-  for my $page (sort keys %$by_page) {
-    $self->logger->warn("\nPAGE: $page");
-    for my $link (sort keys %{ $by_page->{$page} }) {
-      my $d = $by_page->{$page}{$link};
-      $self->logger->warn(sprintf(
-        "  - %s (x%d) status=%s err=%s",
-        $link, $d->{occurrences}, $d->{status}, ($d->{error} // '')
-      ));
-    }
-  }
-
-  # View 2: by link (good for deduping / spotting common failures)
-  for my $link (sort keys %{ $self->{_broken} }) {
-    my $e = $self->{_broken}{$link}{error} // '';
-    $self->logger->warn("\nLINK: $link\n  error: $e");
-    for my $p (sort keys %{ $self->{_broken}{$link}{pages} }) {
-      $self->logger->warn("  on: $p (x$self->{_broken}{$link}{pages}{$p})");
-    }
-  }
-}
 
 1;
 __END__
