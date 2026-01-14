@@ -7,12 +7,19 @@ require Log::Handler;
 require WebFramework::Service::Markdown;
 
 use Path::Tiny;
+use FindBin;
 
 extends 'Thunderhorse::Module';
 
 has pages_dir => (
   is   => 'rw',
   lazy => 1,
+  default => sub {
+    my $self = shift;
+
+    my $markdownRoot = $self->app->config->{config}->{markdown_dir};
+    return path($FindBin::Bin)->parent->child($markdownRoot);
+  }
 );
 
 has markdown => (
@@ -20,11 +27,6 @@ has markdown => (
   is      => 'rw',
 );
 
-sub _build_pages_dir ($self) {
-  # Default to share/pages relative to project root
-  use FindBin;
-  return path($FindBin::Bin)->parent->child('share/pages');
-}
 
 sub build ($self) {
   weaken $self;
