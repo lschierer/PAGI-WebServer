@@ -12,8 +12,8 @@ use FindBin;
 extends 'Thunderhorse::Module';
 
 has pages_dir => (
-  is   => 'rw',
-  lazy => 1,
+  is      => 'rw',
+  lazy    => 1,
   default => sub {
     my $self = shift;
 
@@ -26,7 +26,6 @@ has markdown => (
   default => sub { return WebFramework::Service::Markdown->new; },
   is      => 'rw',
 );
-
 
 sub build ($self) {
   weaken $self;

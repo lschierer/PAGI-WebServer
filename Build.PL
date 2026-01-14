@@ -17,6 +17,7 @@ my $builder = Module::Build->new(
     #'Future::IO'          => '0',
     'HTML::FromANSI'    => '0',
     'IO::Async::Loop'   => '0',
+    'IO::FDPass'        => '0',
     'GraphViz'          => '0',
     'GraphViz2'         => '0',
     'Log::Handler'      => '0',
@@ -68,8 +69,8 @@ my $builder = Module::Build->new(
   },
   # Mojolicious to provide Mojo::DOM
   test_requires => {
-    'Test2::V0' => '0',
-    'Mojolicious'       => '0',
+    'Test2::V0'   => '0',
+    'Mojolicious' => '0',
   },
   add_to_cleanup     => ['PAGI-WebServer-*'],
   create_makefile_pl => 'traditional',
