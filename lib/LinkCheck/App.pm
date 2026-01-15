@@ -14,8 +14,7 @@ use LinkCheck::Worker ();
 sub execute ($self) {
   MCE::Shared->start();
   MCE::Shared->init();
-  $self->ensure_logging(__PACKAGE__);
-  $self->start(URI->new($self->start));
+  $self->start($self->canon_url($self->start));
 
   $self->logger->debug("base host is " . $self->base->{host});
   say "About to store queue item for: " . $self->start->as_string;
@@ -58,6 +57,8 @@ sub execute ($self) {
       # Use the shared queue and lock from the parent
       $worker_app->_internal_q($self->_internal_q);
       $worker_app->_external_q($self->_external_q);
+      $worker_app->_worker_phase($self->_worker_phase);
+      $worker_app->_phase_lock($self->_phase_lock);
       $worker_app->_host_lock($self->_host_lock);
 
       $worker_app->mce_user_func($mce, $self->_internal_q, $self->_external_q);

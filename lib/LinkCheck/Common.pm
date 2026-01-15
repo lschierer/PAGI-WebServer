@@ -16,8 +16,6 @@ use Sereal::Encoder;
 use Sereal::Decoder;
 use Time::HiRes qw(time);
 use URI;
-use XML::LibXML;
-use XML::LibXML::XPathContext;
 use Time::HiRes qw(sleep);
 
 use Carp;
@@ -98,7 +96,7 @@ has base => (
     my $url  = $self->start->clone;
     $url->fragment(undef);
     $url->query(undef);
-    $url->path(undef);
+    $url->path('/');
     my $h = {
       host => lc($url->host),
       url  => $url,
@@ -115,11 +113,8 @@ has _internal_pending_count => (
 has _internal_q => (
   default => sub {
     my @data = ();
-    return MCE::Shared->share({
-        _DEEPLY_ => 1,
-        module   => 'MCE::Shared::Hash',
-      },
-    );
+    return  MCE::Shared->hash({ _DEEPLY_ => 1, });
+
   },
   is => 'rw',
 );
@@ -127,13 +122,25 @@ has _internal_q => (
 has _external_q => (
   default => sub {
     my @data = ();
-    return MCE::Shared->share({
-        _DEEPLY_ => 1,
-        module   => 'MCE::Shared::Hash',
-      },
-    );
+    return  MCE::Shared->hash({ _DEEPLY_ => 1, });
+
   },
   is => 'rw',
+);
+
+has _worker_phase => (
+  default => sub {
+    my @data = ();
+    return  MCE::Shared->hash({ _DEEPLY_ => 1, });
+
+  },
+  is => 'rw',
+);
+
+has _phase_lock => (
+  default => sub { return MCE::Mutex->new },
+  lazy    => 1,
+  is      => 'rw',
 );
 
 has _broken => (
@@ -217,16 +224,48 @@ sub canon_url ($self, $u) {
 
   $uri->host(lc $uri->host) if $uri->host;
 
-  my $path = $uri->path // '/';
-  # collapse multiple slashes
+  # normalize default ports
+  if ( ($uri->scheme eq 'http' && ($uri->port // 80) == 80)
+    || ($uri->scheme eq 'https' && ($uri->port // 443) == 443)) {
+    $uri->port(undef);
+  }
+
+  my $path = $uri->path;
+  $path = '/' if !defined($path) || $path eq '';    # IMPORTANT
+
   $path =~ s{//+}{/}g;
-
-  # strip trailing slash for non-root
   $path =~ s{/$}{} if $path ne '/';
-
   $uri->path($path);
 
   return $uri->as_string;
+}
+
+sub _mark_phase ($self, $wid, $phase, $value) {
+  $self->_phase_lock->lock;
+  $self->_worker_phase->{$wid}->{$phase} = $value;
+  $self->_phase_lock->unlock;
+}
+
+sub _wait_all ($self, $wid, $phase, $total_workers) {
+
+  my $done;
+  do {
+    $done = 0;
+
+    $self->_phase_lock->synchronize( sub {
+      for my $w (1 .. $total_workers) {
+        if (($self->_worker_phase->{$w}->{$phase} // '') eq 'complete'){
+          $self->logger->debug("wid $wid detects wid $w has completed phase $phase");
+          $done++;
+        } else {
+          $self->logger->debug(sprintf('wid %s detects wid %s has not completed phase "%s": %s',
+          $wid, $w, $phase, ($self->_worker_phase->{$w}->{$phase} // '') ));
+        }
+      }
+    });
+
+    select(undef, undef, undef, 0.5);
+  } while ($done != $total_workers);
 }
 
 1;

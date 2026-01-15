@@ -3,6 +3,7 @@ use v5.42.0;
 use utf8::all;
 use Mooish::Base -role;
 require Path::Tiny;
+require Data::Printer;
 use File::HomeDir::Tiny ();
 use Log::Handler;
 use Carp;
@@ -30,31 +31,32 @@ has log_dir => (
 );
 
 sub log_base {
-    my $self = shift;
-    my $log_base;
+  my $self = shift;
+  my $log_base;
 
-    if ($self->isa('Thunderhorse::App')) {
-      say 'Called from Application class' if $self->debugLogging;
-      $log_base //= $self->getConfig($self->env)->{log_base};
-      say "getConfig log_base is '$log_base'" if $self->debugLogging;
-    }
-    elsif ($self->can('app')) {
-      say 'Called from ' . blessed($self) if $self->debugLogging;
-      $log_base //= $self->app->getConfig($self->app->env)->{log_base};
-    }elsif($self->can('config')){
-      say 'Called from ' . blessed($self) if $self->debugLogging;
-      $log_base //= $self->config->{config}->{log_base};
-      $log_base //= $self->config->{log_base};
-    }
-
-   if(!defined($log_base)) {
-      say 'Called from ' . blessed($self) if $self->debugLogging;
-      my @parts = split '::', blessed($self);
-      $log_base = $parts[0];
-    }
-
-    return $log_base;
+  if ($self->isa('Thunderhorse::App')) {
+    say 'Called from Application class' if $self->debugLogging;
+    $log_base //= $self->getConfig($self->env)->{log_base};
+    say "getConfig log_base is '$log_base'" if $self->debugLogging;
   }
+  elsif ($self->can('app')) {
+    say 'Called from ' . blessed($self) if $self->debugLogging;
+    $log_base //= $self->app->getConfig($self->app->env)->{log_base};
+  }
+  elsif ($self->can('config')) {
+    say 'Called from ' . blessed($self) if $self->debugLogging;
+    $log_base //= $self->config->{config}->{log_base};
+    $log_base //= $self->config->{log_base};
+  }
+
+  if (!defined($log_base)) {
+    say 'Called from ' . blessed($self) if $self->debugLogging;
+    my @parts = split '::', blessed($self);
+    $log_base = $parts[0];
+  }
+
+  return $log_base;
+}
 
 has 'accessLog' => (
   is   => 'rw',
@@ -71,11 +73,17 @@ sub add_outputs ($self) {
 
   my $systemLog = $self->log_dir->child('system.log');
   my $maxlevel  = 'warning';
-  if ($self->app->env eq 'development') {
+  if ($self->can('app') && $self->app->env eq 'development') {
     $maxlevel = 'debug';
   }
-  elsif ($self->app->env eq 'staging') {
+  elsif ($self->can('app') && $self->app->env eq 'staging') {
     $maxlevel = 'info';
+  }
+  elsif (blessed($self) =~ /LinkCheck/) {
+    $maxlevel = 'debug';
+  }
+  else {
+    $maxlevel = 'notice';
   }
 
   say "maxlevel is $maxlevel" if $self->debugLogging;

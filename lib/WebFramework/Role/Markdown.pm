@@ -15,7 +15,7 @@ has markdown => (
   is      => 'ro',
   default => sub {
     my $self = shift;
-    my $md = WebFramework::Service::Markdown->new(log_dir => $self->log_dir);
+    my $md   = WebFramework::Service::Markdown->new(log_dir => $self->log_dir);
     return $md;
   },
 );

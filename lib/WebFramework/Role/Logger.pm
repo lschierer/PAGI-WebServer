@@ -6,7 +6,6 @@ with 'WebFramework::Role::LogConfig';
 use Log::Handler;
 use Carp;
 
-
 sub logger {
   my $self = shift;
   state $l;
