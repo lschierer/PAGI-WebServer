@@ -241,9 +241,14 @@ sub canon_url ($self, $u) {
 }
 
 sub _mark_phase ($self, $wid, $phase, $value) {
-  $self->_phase_lock->lock;
-  $self->_worker_phase->{$wid}->{$phase} = $value;
-  $self->_phase_lock->unlock;
+  $self->_phase_lock->synchronize(sub {
+    my $cur = $self->_worker_phase->{$wid}->{$phase} // '';
+
+    my %rank = ( '' => 0, started => 1, complete => 2 );
+    if ($rank{$value} > ($rank{$cur} // 0)) {
+      $self->_worker_phase->{$wid}->{$phase} = $value;
+    }
+  });
 }
 
 sub _wait_all ($self, $wid, $phase, $total_workers) {
@@ -264,7 +269,7 @@ sub _wait_all ($self, $wid, $phase, $total_workers) {
       }
     });
 
-    select(undef, undef, undef, 0.5);
+    select(undef, undef, undef, 0.05);
   } while ($done != $total_workers);
 }
 

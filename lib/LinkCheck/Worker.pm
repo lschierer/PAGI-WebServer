@@ -21,6 +21,7 @@ sub mce_user_func ($self, $mce, $internal_q, $external_q) {
   $self->main_external_loop($mce, $pid, $wid);
   $self->_wait_all($wid, 'main_external_loop', $self->workers);
   $self->main_validation_loop($mce, $pid, $wid);
+  # make sure validation is done before we return control to the master.
   $self->_wait_all($wid, 'main_validation_loop', $self->workers);
 }
 
