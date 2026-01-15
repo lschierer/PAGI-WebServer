@@ -75,6 +75,14 @@ sub build ($self) {
       action => 'http.get',
     }
   );
+
+  $router->add(
+    '/sitemap.xml',
+    {
+      to     => 'sitemap',
+      action => 'http.get',
+    }
+  );
 }
 
 sub getConfig ($self, $env, $dirstring = undef) {
@@ -149,6 +157,13 @@ sub health ($self, $ctx) {
     theme     => 'Material',
   );
 
+  my $module_dump = Data::Printer::np(
+    $self->modules,
+    multiline => 1,
+    colored   => 0,            # Disable colors to avoid ANSI codes
+    theme     => 'Material',
+  );
+
   # Debug: check template configuration
   use Cwd;
   my $cwd = getcwd();
@@ -164,8 +179,18 @@ sub health ($self, $ctx) {
       connections     => $connections,
       max_connections => $maxconn,
       config_dump     => $config_dump,
+      module_dump     => $module_dump,
     }
   );
+}
+
+sub sitemap ($self, $ctx) {
+  my $base_url = $self->config->{site_url} // '';
+  my $xml = $self->generate_sitemap($base_url);
+
+  $ctx->res->header('Content-Type', 'application/xml; charset=UTF-8');
+
+  return $xml;
 }
 
 1;

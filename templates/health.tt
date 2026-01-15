@@ -30,6 +30,7 @@
             margin: 0.5rem 0 0 1rem;
             font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
         }
+        .module_dump,
         .config-dump {
             background: white;
             border: 1px solid #dee2e6;
@@ -38,6 +39,7 @@
             overflow-x: auto;
             font-size: 0.9em;
         }
+        .module-dump pre,
         .config-dump pre {
             margin: 0;
             white-space: pre-wrap;
@@ -49,14 +51,17 @@
     <dl>
         <dt>Environment:</dt>
         <dd>[% env %]</dd>
-        
+
         <dt>Connections:</dt>
         <dd>[% connections %] / [% max_connections %]</dd>
-        
+
         <dt>Configuration:</dt>
         <dd>
             <div class="config-dump">
                 <pre>[% config_dump %]</pre>
+            </div>
+            <div class="module-dump">
+                <pre>[% module_dump %]</pre>
             </div>
         </dd>
     </dl>

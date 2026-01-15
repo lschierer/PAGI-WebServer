@@ -34,6 +34,12 @@ sub build ($self) {
       return $self->_render_navigation($current_path);
     }
   );
+
+  $self->register(
+    controller => generate_sitemap => sub ($controller, $base_url = '') {
+      return $self->_generate_sitemap($base_url);
+    }
+  );
 }
 
 # Register a route for navigation
@@ -284,6 +290,55 @@ sub _navigation_is_immediate_child ($self, $path1, $path2) {
   return 1;
 }
 
+sub _generate_sitemap ($self, $base_url = '') {
+  use Mojo::Util qw(xml_escape);
+  
+  # Remove trailing slash from base_url
+  $base_url =~ s|/$||;
+  
+  # Build the tree to ensure all intermediate paths are included
+  $self->build_navigation_tree() unless keys %{ $self->navigation_tree };
+  
+  my @urls;
+  
+  # Collect all paths from the tree recursively
+  my $collect_paths;
+  $collect_paths = sub {
+    my ($node, $path) = @_;
+    
+    for my $segment (sort keys %$node) {
+      my $current_path = $path . '/' . $segment;
+      my $data = $node->{$segment};
+      
+      # Skip if marked as no_sitemap
+      next if $data->{no_sitemap};
+      
+      # Add this path if it has a title (meaning it's a real route)
+      if ($data->{title}) {
+        my $full_url = $base_url . $current_path;
+        push @urls, sprintf(
+          "  <url>\n    <loc>%s</loc>\n  </url>",
+          xml_escape($full_url)
+        );
+      }
+      
+      # Recurse into children
+      if ($data->{children} && keys %{$data->{children}}) {
+        $collect_paths->($data->{children}, $current_path);
+      }
+    }
+  };
+  
+  $collect_paths->($self->navigation_tree, '');
+  
+  my $xml = qq{<?xml version="1.0" encoding="UTF-8"?>\n};
+  $xml .= qq{<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n};
+  $xml .= join("\n", @urls) . "\n";
+  $xml .= qq{</urlset>};
+  
+  return $xml;
+}
+
 1;
 
 __END__
@@ -328,5 +383,9 @@ Render the navigation tree as HTML with intelligent expansion.
 =head2 build_navigation_tree()
 
 Build the tree structure from registered routes.
+
+=head2 generate_sitemap()
+
+Generate an XML sitemap from registered navigation routes.
 
 =cut
