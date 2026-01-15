@@ -3,22 +3,60 @@ use v5.42;
 use utf8::all;
 
 use Mooish::Base -standard;
-with 'WebFramework::Role::Logger';
 
 require MCE::Mutex;
 require MCE::Shared;
 require Future::HTTP;
 require IO::FDPass;
+require Path::Tiny;
+use File::HomeDir::Tiny ();
+use Log::Handler;
 use MCE::Loop;
 use MCE::Queue;
 use MCE;
-use Sereal::Encoder;
 use Sereal::Decoder;
-use Time::HiRes qw(time);
+use Sereal::Encoder;
+use Time::HiRes qw(time sleep);
 use URI;
-use Time::HiRes qw(sleep);
 
 use Carp;
+
+has logfile => (
+  is  => 'ro',
+  lazy  => 1,
+  default => sub {
+    my $self = shift;
+    my $home = Path::Tiny::path(File::HomeDir::Tiny::home);
+    my @parts = split '::', blessed($self);
+    my $log_base = $parts[0];
+    my $lf   = $home->child(sprintf('var/log/Perl/dist/%s/system.log', $log_base));
+
+    unless (-d $lf->parent){
+      $lf->parent->mkdir({ mode => 0750 });
+    }
+    return $lf;
+  },
+);
+
+has logger => (
+  is => 'ro',
+  lazy  => 1,
+  default => sub {
+    my $self = shift;
+    my $log = Log::Handler->new();
+    $log->add(
+        file => {
+            filename    => $self->logfile,
+            maxlevel    => "debug",
+            minlevel    => "emergency",
+            autoflush   => 1,
+            utf8        => 1,
+            debug_trace => 1,
+        }
+    );
+    return $log;
+  }
+);
 
 has start => (
   required => 1,
@@ -169,6 +207,10 @@ has external_min_interval => (is => 'ro', default => 1.0)
 has external_jitter => (is => 'ro', default => 0.2);  # random 0..jitter seconds
 has external_host_slots => (is => 'ro', default => 1)
   ;    # max concurrent requests per host
+has external_batch_size => (is => 'ro', default => 10)
+  ;    # URLs to claim per worker iteration
+has internal_batch_size => (is => 'ro', default => 20)
+  ;    # URLs to claim per worker iteration for internal links
 
 # Do not access directly, access via
 # $self->_new_queue_item;

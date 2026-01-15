@@ -4,10 +4,11 @@ use v5.42;
 use utf8::all;
 
 use Mooish::Base -standard;
-with 'WebFramework::Role::Logger';
 extends 'LinkCheck::Common';
 require Future::HTTP;
+use Future;
 
+use IO::Async::Loop;
 use Mojo::DOM58;
 use Carp;
 
@@ -16,13 +17,25 @@ sub mce_user_func ($self, $mce, $internal_q, $external_q) {
   $self->_internal_q($internal_q);
   $self->_external_q($external_q);
 
-  $self->main_internal_loop($mce, $pid, $wid);
-  $self->_wait_all($wid, 'main_internal_loop', $self->workers);
+  my $max_internal = $mce->max_workers -1;
+  if($wid != $mce->max_workers) {
+    $self->main_internal_loop($mce, $pid, $wid);
+    $self->_wait_all($wid, 'main_internal_loop', $max_internal);
+  } else {
+    #sleep once to let some links queue up so we don't just exit.
+    select(undef, undef, undef, 2);
+  }
+
   $self->main_external_loop($mce, $pid, $wid);
-  $self->_wait_all($wid, 'main_external_loop', $self->workers);
+  $self->_wait_all($wid, 'main_external_loop', $mce->max_workers);
   $self->main_validation_loop($mce, $pid, $wid);
   # make sure validation is done before we return control to the master.
-  $self->_wait_all($wid, 'main_validation_loop', $self->workers);
+  $self->_wait_all($wid, 'main_validation_loop', $mce->max_workers);
+}
+
+sub _loop ($self) {
+  state $loop;
+  return $loop //= IO::Async::Loop->new;
 }
 
 sub _ua ($self) {
@@ -31,6 +44,8 @@ sub _ua ($self) {
   return $ua //= Future::HTTP->new(
     timeout       => $self->request_timeout // 30,
     max_redirects => 5,
+    loop          => $self->_loop,
+    user_agent    => 'Mozilla/5.0 (compatible; LinkChecker/1.0; +https://github.com/lschierer/PAGI-WebServer)',
 
     # Only needed if you hit self-signed local https.
     # Better: gate this on host =~ /^(?:localhost|127\.0\.0\.1)$/
@@ -48,10 +63,15 @@ sub _status_from_headers ($headers) {
 sub main_external_loop ($self, $mce, $pid, $wid) {
   $self->logger->notice('Start of main_external_loop');
   $self->_mark_phase($wid, 'main_external_loop', 'started');
-  my $key;
+
   my $no_work_count = 0;
   my @in_progress;
+  my @pending_futures;
+
   do {
+    # Claim multiple URLs up to a batch size
+    my $batch_size = $self->external_batch_size // 10;
+
     $self->_host_lock->lock;
     my @all_keys = $self->_external_q->keys();
     my @unchecked =
@@ -59,78 +79,75 @@ sub main_external_loop ($self, $mce, $pid, $wid) {
     @in_progress =
       grep { $self->_external_q->{$_}->{state} eq 'in-progress' } @all_keys;
 
-    $key = $unchecked[0];
+    my @claimed;
+    my $now = time;
 
-    if ($key) {
-      # Extract host from URL for throttling
+    for my $key (@unchecked) {
+      last if @claimed >= $batch_size;
+
       my $uri  = URI->new($key);
       my $host = $uri->host;
 
-      # Check if we can make a request to this host
-      my $now       = time;
       my $next_time = $self->_host_next_time->{$host} // 0;
       my $inflight  = $self->_host_inflight->{$host}  // 0;
 
-      if ($now < $next_time) {
-        # Too soon to request from this host, skip it
-        $key = undef;
-      }
-      elsif ($inflight >= $self->external_host_slots) {
-        # Too many concurrent requests to this host, skip it
-        $key = undef;
-      }
-      else {
-        # Claim this URL and update throttling state
-        $self->_external_q->{$key}->{state}      = 'in-progress';
-        $self->_external_q->{$key}->{claimed_at} = $now;
-        $self->_external_q->{$key}->{claimed_by} = "$pid/$wid";
+      next if $now < $next_time;
+      next if $inflight >= $self->external_host_slots;
 
-        # Update host throttling
-        $self->_host_inflight->{$host} = $inflight + 1;
-        my $jitter = rand($self->external_jitter);
-        $self->_host_next_time->{$host} =
-          $now + $self->external_min_interval + $jitter;
+      # Claim this URL
+      $self->_external_q->{$key}->{state}      = 'in-progress';
+      $self->_external_q->{$key}->{claimed_at} = $now;
+      $self->_external_q->{$key}->{claimed_by} = "$pid/$wid";
 
-        $no_work_count = 0;
-        my $msg = "pid $pid; wid $wid; claimed key $key";
-        $self->logger->debug($msg);
-        say $msg if ($self->verbose > 1);
-      }
-    }
-    elsif (@in_progress) {
-      # Other workers are still processing, wait for them to add more work
-      $no_work_count = 0;
-      $self->logger->debug(sprintf(
-        'pid %s; wid %s; no unchecked keys, but work in progress, will retry',
-        $pid, $wid
-      ));
-    }
-    else {
-      # No unchecked, no in-progress = truly done
-      $no_work_count++;
-      $self->logger->debug(
-        "pid $pid; wid $wid; no work found (count: $no_work_count)");
+      $self->_host_inflight->{$host} = $inflight + 1;
+      my $jitter = rand($self->external_jitter);
+      $self->_host_next_time->{$host} =
+        $now + $self->external_min_interval + $jitter;
+
+      push @claimed, $key;
+      $self->logger->debug("pid $pid; wid $wid; claimed key $key");
     }
 
     $self->_host_lock->unlock;
 
-    if ($key) {
-      $self->check_external_url($key);
+    # Start async requests for claimed URLs
+    for my $key (@claimed) {
+      push @pending_futures, $self->check_external_url_async($key);
+      $no_work_count = 0;
     }
-    elsif (@in_progress || $no_work_count < 3) {
-      # Brief sleep to avoid spinning
+
+    # Process event loop to make progress on pending futures
+    if (@pending_futures) {
+      $self->_loop->loop_once(0.01);
+
+      # Remove completed futures
+      @pending_futures = grep { !$_->is_ready } @pending_futures;
+    }
+    elsif (@in_progress) {
+      $no_work_count = 0;
       select(undef, undef, undef, 0.1);
     }
-  } while ($key || @in_progress);
+    else {
+      $no_work_count++;
+      $self->logger->debug(
+        "pid $pid; wid $wid; no work found (count: $no_work_count)");
+      select(undef, undef, undef, 0.1) if $no_work_count < 3;
+    }
+  } while (@pending_futures || @in_progress || $no_work_count < 3);
+
   $self->_mark_phase($wid, 'main_external_loop', 'complete');
 }
 
 sub main_internal_loop ($self, $mce, $pid, $wid) {
   $self->_mark_phase($wid, 'main_internal_loop', 'started');
-  my $key;
+
   my $no_work_count = 0;
   my @in_progress;
+  my @pending_futures;
+
   do {
+    my $batch_size = $self->internal_batch_size // 20;
+
     $self->_host_lock->lock;
 
     my @all_keys = $self->_internal_q->keys();
@@ -139,56 +156,57 @@ sub main_internal_loop ($self, $mce, $pid, $wid) {
     @in_progress =
       grep { $self->_internal_q->{$_}->{state} eq 'in-progress' } @all_keys;
 
-    $key = $unchecked[0];
-    if ($key) {
+    my @claimed;
+    my $now = time;
+
+    for my $key (@unchecked) {
+      last if @claimed >= $batch_size;
+
       $self->_internal_q->{$key}->{state}      = 'in-progress';
-      $self->_internal_q->{$key}->{claimed_at} = time;
+      $self->_internal_q->{$key}->{claimed_at} = $now;
       $self->_internal_q->{$key}->{claimed_by} = "$pid/$wid";
-      $no_work_count                           = 0;
-      my $msg = "pid $pid; wid $wid; claimed key $key";
-      $self->logger->debug($msg);
-      say $msg if ($self->verbose > 1);
-    }
-    elsif (@in_progress) {
-      # Other workers are still processing, wait for them to add more work
-      $no_work_count = 0;
-      $self->logger->debug(sprintf(
-        'pid %s; wid %s; no unchecked keys, but work in progress, will retry',
-        $pid, $wid
-      ));
-    }
-    else {
-      # No unchecked, no in-progress = truly done
-      $no_work_count++;
-      $self->logger->debug(
-        "pid $pid; wid $wid; no work found (count: $no_work_count)");
+
+      push @claimed, $key;
+      $self->logger->debug("pid $pid; wid $wid; claimed key $key");
     }
 
     $self->_host_lock->unlock;
 
-    if ($key) {
-      $self->get_internal_url($key);
+    for my $key (@claimed) {
+      push @pending_futures, $self->get_internal_url_async($key);
+      $no_work_count = 0;
     }
-    elsif (@in_progress || $no_work_count < 3) {
-      # Brief sleep to avoid spinning
+
+    if (@pending_futures) {
+      $self->_loop->loop_once(0.01);
+      @pending_futures = grep { !$_->is_ready } @pending_futures;
+    }
+    elsif (@in_progress) {
+      $no_work_count = 0;
       select(undef, undef, undef, 0.1);
     }
-  } while ($key || @in_progress);
+    else {
+      $no_work_count++;
+      $self->logger->debug(
+        "pid $pid; wid $wid; no work found (count: $no_work_count)");
+      select(undef, undef, undef, 0.1) if $no_work_count < 3;
+    }
+  } while (@pending_futures || @in_progress || $no_work_count < 3);
 
   $self->_mark_phase($wid, 'main_internal_loop', 'complete');
   $self->logger->info("pid $pid; wid $wid; exiting - no more work");
 }
 
-sub check_external_url ($self, $url) {
+sub check_external_url_async ($self, $url) {
   return unless ($url && length($url));
   $url = $self->canon_url($url);
   unless ($self->_external_q->exists($url)) {
     my $errmsg = "no external queue entry for $url";
     $self->logger->error($errmsg);
     warn($errmsg);
-    return;
+    return Future->done;
   }
-  return if ($self->_external_q->{$url}->{state} eq 'checked');
+  return Future->done if ($self->_external_q->{$url}->{state} eq 'checked');
 
   my $msg = "checking external url $url";
   say $msg if ($self->verbose);
@@ -198,19 +216,26 @@ sub check_external_url ($self, $url) {
   my $host = $uri->host;
 
   my $ua  = $self->_ua;
-  my $res = $ua->http_head($url)->then(sub {
+
+  my $cleanup = sub {
+    $self->_host_lock->lock;
+    my $inflight = $self->_host_inflight->{$host} // 1;
+    $self->_host_inflight->{$host} = $inflight - 1;
+    $self->_host_lock->unlock;
+    $self->_external_q->{$url}->{state} = 'checked';
+  };
+
+  return $ua->http_head($url)->then(sub {
     my ($body, $headers) = @_;
 
-    # Check status code from headers
     my $status = _status_from_headers($headers);
     $self->_external_q->{$url}->{http_status} = $status;
 
     if ($status >= 200 && $status < 400) {
-      # Success or redirect - link is valid
       $self->logger->info("External link OK: $url (status $status)");
+      return Future->done;
     }
     elsif ($status == 403 || $status == 405) {
-      # Forbidden or Method Not Allowed - try GET instead
       return $ua->http_get($url)->then(sub {
         my ($body2, $headers2) = @_;
         my $status2 = $headers2->{Status} // 0;
@@ -226,51 +251,48 @@ sub check_external_url ($self, $url) {
       });
     }
     else {
-      # Error
       $self->logger->warn("External link failed: $url (status $status)");
       $self->_external_q->{$url}->{error} = "HTTP $status";
+      return Future->done;
     }
   })->catch(sub {
     my ($error) = @_;
     $self->logger->error("External link error: $url - $error");
     $self->_external_q->{$url}->{error}       = "$error";
     $self->_external_q->{$url}->{http_status} = 0;
-  })->finally(sub {
-    # Decrement inflight count for this host
-    $self->_host_lock->lock;
-    my $inflight = $self->_host_inflight->{$host} // 1;
-    $self->_host_inflight->{$host} = $inflight - 1;
-    $self->_host_lock->unlock;
-  })->get();
-
-  $self->_external_q->{$url}->{state} = 'checked';
+  })->then(sub {
+    $cleanup->();
+    return Future->done;
+  });
 }
 
-sub get_internal_url($self, $url) {
+sub check_external_url ($self, $url) {
+  $self->check_external_url_async($url)->get();
+}
+
+sub get_internal_url_async($self, $url) {
   return unless ($url && length($url));
   $url = $self->canon_url($url);
   unless ($self->_internal_q->exists($url)) {
     my $errmsg = "no internal queue entry for $url";
     $self->logger->error($errmsg);
     warn($errmsg);
-    return;
+    return Future->done;
   }
-  return if ($self->_internal_q->{$url}->{state} eq 'checked');
+  return Future->done if ($self->_internal_q->{$url}->{state} eq 'checked');
   my $msg = "getting internal url $url";
   say $msg if ($self->verbose);
   $self->logger->info($msg);
   my $ua  = $self->_ua;
-  my $res = $ua->http_get($url)->then(sub {
+  return $ua->http_get($url)->then(sub {
     my ($body, $headers) = @_;
 
-    # Store the HTTP status code
     my $status = _status_from_headers($headers);
     $self->_internal_q->{$url}->{http_status} = $status;
 
     if ($status >= 200 && $status < 400) {
       my $extracted = $self->process_url($url, $body, $headers);
 
-      # Store the extracted data (plain arrays/strings only)
       $self->_internal_q->{$url}->{pending_internal_links} =
         $extracted->{internal_links};
       $self->_internal_q->{$url}->{pending_external_links} =
@@ -285,8 +307,8 @@ sub get_internal_url($self, $url) {
         }
         my $uri  = URI->new($link);
         my $host = $uri->clone;
-        $host->fragment(undef);    # Remove fragment (#anchor)
-        $host->query(undef);       # Remove query string (?param=value)
+        $host->fragment(undef);
+        $host->query(undef);
 
         my $base_url = $self->canon_url($host->as_string) // next;
         unless (exists $self->_internal_q->{$base_url}) {
@@ -297,12 +319,10 @@ sub get_internal_url($self, $url) {
       for my $ext (@{ $extracted->{external_links} // [] }) {
         my $canon = $self->canon_url($ext) // next;
 
-# Don’t create external jobs for things you’re treating as internal by host policy
         next
           if URI->new($canon)->host
           && lc(URI->new($canon)->host) eq $self->base->{host};
 
-        # Create external queue item if new
         unless ($self->_external_q->exists($canon)) {
           $self->_external_q->{$canon} = $self->_new_queue_item;
         }
@@ -317,8 +337,14 @@ sub get_internal_url($self, $url) {
     $self->logger->error("Internal link error: $url - $error");
     $self->_internal_q->{$url}->{error}       = "$error";
     $self->_internal_q->{$url}->{http_status} = 0;
-  })->get();
-  $self->_internal_q->{$url}->{state} = 'checked';
+  })->then(sub {
+    $self->_internal_q->{$url}->{state} = 'checked';
+    return Future->done;
+  });
+}
+
+sub get_internal_url($self, $url) {
+  $self->get_internal_url_async($url)->get();
 }
 
 sub process_url ($self, $url, $body, $headers) {

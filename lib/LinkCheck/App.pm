@@ -3,7 +3,6 @@ use v5.42;
 use utf8::all;
 
 use Mooish::Base -standard;
-with 'WebFramework::Role::Logger';
 extends 'LinkCheck::Common';
 
 use Carp;
