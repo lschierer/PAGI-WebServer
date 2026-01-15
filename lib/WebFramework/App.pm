@@ -6,17 +6,19 @@ use Mooish::Base -standard;
 with 'WebFramework::Role::Logger';
 extends 'Thunderhorse::App';
 
-use Future::AsyncAwait;
+#use Encode              qw(encode decode FB_DEFAULT FB_CROAK);
+require Data::Printer;
 require PAGI::Server;
 require Path::Tiny;
-require Thunderhorse::Module::Logger;
 require Thunderhorse::Module::Template;
-require Data::Printer;
+require Thunderhorse::Module::Logger;
 require YAML::PP;
-#use Encode              qw(encode decode FB_DEFAULT FB_CROAK);
 use File::HomeDir::Tiny ();
-use Carp;
+use FindBin;
+use Future::AsyncAwait;
 use IO::Async::Loop;
+
+use Carp;
 
 our $VERSION = '0.01';
 
@@ -25,17 +27,45 @@ has 'server' => (
   lazy => 1,
 );
 
+has local_conf_dir => (
+  default => sub {
+    my $self = shift;
+    return $self->local_conf_dir(
+      Path::Tiny::path($FindBin::Bin)->parent->child('share/conf'));
+  },
+  is   => 'rw',
+  lazy => 1,
+);
+
+has env => (is => 'ro');
+
+has initial_config => (
+  is      => 'ro',
+  lazy    => 1,
+  default => sub {
+    my $self   = shift;
+    my $config = $self->getConfig($self->env);
+    return $config;
+  },
+);
+
 sub build ($self) {
-  $self->logger->debug('WebFramework::App->build starting');
+
   $self->SUPER::build();
+  $self->load_module(
+    'Logger' => {
+      outputs => [
+        file => {
+          'utf-8'  => true,
+          filename => Path::Tiny::path(File::HomeDir::Tiny::home)
+            ->child('/var/log/Perl/dist/Schierer-HPFan/system.log')
+            ->absolute->stringify,
+        }
+      ]
+    }
+  );
 
-  $self->logSetup(__PACKAGE__);
-
-  $self->load_module('^WebFramework::Module::SiteLogo');
-  $self->load_module('^WebFramework::Module::Navigation');
-
-  $self->load_module('^WebFramework::Module::AutoIndex');
-
+  $self->logger->debug('WebFramework::App->build starting');
   my $router = $self->router;
 
   $router->add(
@@ -47,13 +77,16 @@ sub build ($self) {
   );
 }
 
-sub getConfig ($class, $env, $dirstring) {
-  use FindBin;
-  my $configdir = Path::Tiny::path($FindBin::Bin)->parent->child($dirstring);
-  unless ($configdir->is_dir) {
-    croak("config directory '$configdir' must exist.");
+sub getConfig ($self, $env, $dirstring = undef) {
+  if ($dirstring && length($dirstring)) {
+    $self->local_conf_dir(Path::Tiny::path($dirstring));
   }
-  my $file   = $configdir->child(sprintf('%s.yml', $env));
+
+  unless ($self->local_conf_dir->is_dir) {
+    croak(sprintf('config directory "%s" must exist.', $self->local_conf_dir));
+  }
+
+  my $file   = $self->local_conf_dir->child(sprintf('%s.yml', $env));
   my $data   = $file->slurp_utf8;
   my $config = YAML::PP->new(
     schema       => [qw/ + Perl /],
@@ -64,11 +97,10 @@ sub getConfig ($class, $env, $dirstring) {
 
 sub run {
   my $self = shift;
-  $self->logger->debug('WebFramework::App run start');
-  $self->logger->debug(sprintf('WebFramework::App->env is "%s"', $self->env));
 
   my $pagi_stub = $self->SUPER::run();
-  my $loop      = IO::Async::Loop->new;
+
+  my $loop = IO::Async::Loop->new;
 
   my $conflogmsg = sprintf('WebFramework::App run sees config %s',
     Data::Printer::np($self->config));
@@ -78,7 +110,8 @@ sub run {
   my $host    = $self->config->{config}->{server}->{host};
   my $port    = $self->config->{config}->{server}->{port};
   my $workers = $self->config->{config}->{server}->{worker_threads} // 2;
-  my $msg     = sprintf('Starting server on host "%s:%s"', $host, $port);
+
+  my $msg = sprintf('Starting server on host "%s:%s"', $host, $port);
   warn $msg;
   $self->logger->info($msg);
 
@@ -87,7 +120,7 @@ sub run {
     workers    => $workers,
     host       => $host,
     port       => $port,
-    access_log => $self->accessLogFH,
+    access_log => $self->accessLog,
     log_level  => $self->env eq 'development' ? 'info' : 'warn',
   ));
 

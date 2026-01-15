@@ -1,15 +1,13 @@
 package WebFramework::Module::AutoIndex;
 use v5.42.0;
 use Mooish::Base -standard;
-with 'WebFramework::Role::Logger';
-use experimental 'signatures';
-require Log::Handler;
-require WebFramework::Service::Markdown;
-
-use Path::Tiny;
-use FindBin;
-
 extends 'Thunderhorse::Module';
+with 'WebFramework::Role::Logger';
+
+require WebFramework::Service::Markdown;
+use FindBin;
+use Path::Tiny;
+use experimental 'signatures';
 
 has pages_dir => (
   is      => 'rw',
@@ -17,7 +15,7 @@ has pages_dir => (
   default => sub {
     my $self = shift;
 
-    my $markdownRoot = $self->app->config->{config}->{markdown_dir};
+    my $markdownRoot = $self->app->getConfig($self->app->env)->{markdown_dir};
     return path($FindBin::Bin)->parent->child($markdownRoot);
   }
 );
