@@ -7,8 +7,14 @@ use File::HomeDir::Tiny ();
 use Log::Handler;
 use Carp;
 
+has debugLogging => (
+  is      => 'ro',
+  default => 1,
+);
+
 has log_dir => (
   is      => 'ro',
+  lazy    => 1,
   default => sub {
     my $self = shift;
     my $home = Path::Tiny::path(File::HomeDir::Tiny::home);
@@ -23,37 +29,32 @@ has log_dir => (
   }
 );
 
-has log_base => (
-  is      => 'lazy',
-  default => sub {
+sub log_base {
     my $self = shift;
     my $log_base;
 
     if ($self->isa('Thunderhorse::App')) {
-      say 'Called from Application class';
+      say 'Called from Application class' if $self->debugLogging;
       $log_base //= $self->getConfig($self->env)->{log_base};
-      say "getConfig log_base is '$log_base'";
-      $log_base //= $self->config->{config}->{log_base};
-      $log_base //= $self->config->{log_base};
-      say "log_base is '$log_base'";
+      say "getConfig log_base is '$log_base'" if $self->debugLogging;
     }
     elsif ($self->can('app')) {
-      say 'Called from ' . blessed($self);
+      say 'Called from ' . blessed($self) if $self->debugLogging;
       $log_base //= $self->app->getConfig($self->app->env)->{log_base};
+    }elsif($self->can('config')){
+      say 'Called from ' . blessed($self) if $self->debugLogging;
+      $log_base //= $self->config->{config}->{log_base};
+      $log_base //= $self->config->{log_base};
     }
-    else {
-      my @parts = split '::', __PACKAGE__;
+
+   if(!defined($log_base)) {
+      say 'Called from ' . blessed($self) if $self->debugLogging;
+      my @parts = split '::', blessed($self);
       $log_base = $parts[0];
     }
 
     return $log_base;
-  },
-);
-
-has debugLogging => (
-  is      => 'ro',
-  default => 1,
-);
+  }
 
 has 'accessLog' => (
   is   => 'rw',

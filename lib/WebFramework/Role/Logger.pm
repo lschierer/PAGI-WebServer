@@ -6,11 +6,13 @@ with 'WebFramework::Role::LogConfig';
 use Log::Handler;
 use Carp;
 
+
 sub logger {
   my $self = shift;
   state $l;
   unless ($l) {
-    $l = Log::Handler->new();
+    my $base = $self->log_base;
+    $l = Log::Handler->get_logger($base);
     $self->add_outputs();
   }
 

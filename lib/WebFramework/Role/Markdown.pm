@@ -14,7 +14,9 @@ require WebFramework::Service::Markdown;
 has markdown => (
   is      => 'ro',
   default => sub {
-    return WebFramework::Service::Markdown->new;
+    my $self = shift;
+    my $md = WebFramework::Service::Markdown->new(log_dir => $self->log_dir);
+    return $md;
   },
 );
 
