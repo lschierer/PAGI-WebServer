@@ -115,17 +115,23 @@ has _internal_pending_count => (
 has _internal_q => (
   default => sub {
     my @data = ();
-    return MCE::Shared->share( {
-      _DEEPLY_ => 1,
-      module => 'MCE::Shared::Hash',
-    }, );
+    return MCE::Shared->share({
+        _DEEPLY_ => 1,
+        module   => 'MCE::Shared::Hash',
+      },
+    );
   },
   is => 'rw',
 );
 
 has _external_q => (
   default => sub {
-    {}
+    my @data = ();
+    return MCE::Shared->share({
+        _DEEPLY_ => 1,
+        module   => 'MCE::Shared::Hash',
+      },
+    );
   },
   is => 'rw',
 );
@@ -136,13 +142,26 @@ has _broken => (
 );
 
 has _host_lock => (
-  default => sub { return MCE::Shared->mutex  },
+  default => sub { return MCE::Mutex->new },
   lazy    => 1,
   is      => 'rw',
 );
 
-has _host_next_time => (is => 'rw');
-has _host_inflight  => (is => 'rw');
+has _host_next_time => (
+  is      => 'rw',
+  default => sub { MCE::Shared->hash() },
+);
+
+has _host_inflight => (
+  is      => 'rw',
+  default => sub { MCE::Shared->hash() },
+);
+
+has external_min_interval => (is => 'ro', default => 1.0)
+  ;    # seconds between requests per host
+has external_jitter => (is => 'ro', default => 0.2);  # random 0..jitter seconds
+has external_host_slots => (is => 'ro', default => 1)
+  ;    # max concurrent requests per host
 
 # Do not access directly, access via
 # $self->_new_queue_item;
