@@ -30,7 +30,7 @@ sub build ($self) {
   my $pages_dir = $self->pages_dir;
 
   # Register generate_directory_index method
-  $self->register(
+  $self->add_method(
     controller => generate_directory_index => sub ($controller, $path) {
       $self->logger->debug("Generating directory index for: $path");
 

@@ -39,7 +39,7 @@ has site_logo => (
 );
 
 sub build ($self) {
-  $self->register(
+  $self->add_method(
     controller => site_logo => sub ($controller) {
       return $self->site_logo;
     }

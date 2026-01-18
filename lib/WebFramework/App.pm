@@ -58,7 +58,8 @@ sub build ($self) {
         file => {
           'utf-8'  => true,
           filename => Path::Tiny::path(File::HomeDir::Tiny::home)
-            ->child('/var/log/Perl/dist/Schierer-HPFan/system.log')
+            ->child(sprintf('/var/log/Perl/dist/%s/syslog',
+            $self->app->config->{config}->{log_base}))
             ->absolute->stringify,
         }
       ]
@@ -172,7 +173,7 @@ sub health ($self, $ctx) {
   $self->logger->debug(
     sprintf('Template config: "%s"', Data::Printer::np($tc) // ''));
 
-  return $self->render(
+  return $self->template(
     'health.tt',
     {
       env             => $env,
