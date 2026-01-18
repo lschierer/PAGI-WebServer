@@ -17,11 +17,12 @@ sub mce_user_func ($self, $mce, $internal_q, $external_q) {
   $self->_internal_q($internal_q);
   $self->_external_q($external_q);
 
-  my $max_internal = $mce->max_workers -1;
-  if($wid != $mce->max_workers) {
+  my $max_internal = $mce->max_workers - 1;
+  if ($wid != $mce->max_workers) {
     $self->main_internal_loop($mce, $pid, $wid);
     $self->_wait_all($wid, 'main_internal_loop', $max_internal);
-  } else {
+  }
+  else {
     #sleep once to let some links queue up so we don't just exit.
     select(undef, undef, undef, 2);
   }
@@ -45,7 +46,8 @@ sub _ua ($self) {
     timeout       => $self->request_timeout // 30,
     max_redirects => 5,
     loop          => $self->_loop,
-    user_agent    => 'Mozilla/5.0 (compatible; LinkChecker/1.0; +https://github.com/lschierer/PAGI-WebServer)',
+    user_agent    =>
+'Mozilla/5.0 (compatible; LinkChecker/1.0; +https://github.com/lschierer/PAGI-WebServer)',
 
     # Only needed if you hit self-signed local https.
     # Better: gate this on host =~ /^(?:localhost|127\.0\.0\.1)$/
@@ -215,7 +217,7 @@ sub check_external_url_async ($self, $url) {
   my $uri  = URI->new($url);
   my $host = $uri->host;
 
-  my $ua  = $self->_ua;
+  my $ua = $self->_ua;
 
   my $cleanup = sub {
     $self->_host_lock->lock;
@@ -283,7 +285,7 @@ sub get_internal_url_async($self, $url) {
   my $msg = "getting internal url $url";
   say $msg if ($self->verbose);
   $self->logger->info($msg);
-  my $ua  = $self->_ua;
+  my $ua = $self->_ua;
   return $ua->http_get($url)->then(sub {
     my ($body, $headers) = @_;
 
@@ -535,7 +537,7 @@ sub main_validation_loop ($self, $mce, $pid, $wid) {
     elsif ($no_work_count < 3) {
       select(undef, undef, undef, 0.1);
     }
-  } while ($key );
+  } while ($key);
 
   $self->_mark_phase($wid, 'main_validation_loop', 'complete');
   $self->logger->notice("pid $pid; wid $wid; validation complete");

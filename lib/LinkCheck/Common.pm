@@ -22,16 +22,17 @@ use URI;
 use Carp;
 
 has logfile => (
-  is  => 'ro',
-  lazy  => 1,
+  is      => 'ro',
+  lazy    => 1,
   default => sub {
-    my $self = shift;
-    my $home = Path::Tiny::path(File::HomeDir::Tiny::home);
-    my @parts = split '::', blessed($self);
+    my $self     = shift;
+    my $home     = Path::Tiny::path(File::HomeDir::Tiny::home);
+    my @parts    = split '::', blessed($self);
     my $log_base = $parts[0];
-    my $lf   = $home->child(sprintf('var/log/Perl/dist/%s/system.log', $log_base));
+    my $lf =
+      $home->child(sprintf('var/log/Perl/dist/%s/system.log', $log_base));
 
-    unless (-d $lf->parent){
+    unless (-d $lf->parent) {
       $lf->parent->mkdir({ mode => 0750 });
     }
     return $lf;
@@ -39,20 +40,20 @@ has logfile => (
 );
 
 has logger => (
-  is => 'ro',
-  lazy  => 1,
+  is      => 'ro',
+  lazy    => 1,
   default => sub {
     my $self = shift;
-    my $log = Log::Handler->new();
+    my $log  = Log::Handler->new();
     $log->add(
-        file => {
-            filename    => $self->logfile,
-            maxlevel    => "debug",
-            minlevel    => "emergency",
-            autoflush   => 1,
-            utf8        => 1,
-            debug_trace => 1,
-        }
+      file => {
+        filename    => $self->logfile,
+        maxlevel    => "debug",
+        minlevel    => "emergency",
+        autoflush   => 1,
+        utf8        => 1,
+        debug_trace => 1,
+      }
     );
     return $log;
   }
@@ -151,7 +152,7 @@ has _internal_pending_count => (
 has _internal_q => (
   default => sub {
     my @data = ();
-    return  MCE::Shared->hash({ _DEEPLY_ => 1, });
+    return MCE::Shared->hash({ _DEEPLY_ => 1, });
 
   },
   is => 'rw',
@@ -160,7 +161,7 @@ has _internal_q => (
 has _external_q => (
   default => sub {
     my @data = ();
-    return  MCE::Shared->hash({ _DEEPLY_ => 1, });
+    return MCE::Shared->hash({ _DEEPLY_ => 1, });
 
   },
   is => 'rw',
@@ -169,7 +170,7 @@ has _external_q => (
 has _worker_phase => (
   default => sub {
     my @data = ();
-    return  MCE::Shared->hash({ _DEEPLY_ => 1, });
+    return MCE::Shared->hash({ _DEEPLY_ => 1, });
 
   },
   is => 'rw',
@@ -286,7 +287,7 @@ sub _mark_phase ($self, $wid, $phase, $value) {
   $self->_phase_lock->synchronize(sub {
     my $cur = $self->_worker_phase->{$wid}->{$phase} // '';
 
-    my %rank = ( '' => 0, started => 1, complete => 2 );
+    my %rank = ('' => 0, started => 1, complete => 2);
     if ($rank{$value} > ($rank{$cur} // 0)) {
       $self->_worker_phase->{$wid}->{$phase} = $value;
     }
@@ -299,14 +300,18 @@ sub _wait_all ($self, $wid, $phase, $total_workers) {
   do {
     $done = 0;
 
-    $self->_phase_lock->synchronize( sub {
+    $self->_phase_lock->synchronize(sub {
       for my $w (1 .. $total_workers) {
-        if (($self->_worker_phase->{$w}->{$phase} // '') eq 'complete'){
-          $self->logger->debug("wid $wid detects wid $w has completed phase $phase");
+        if (($self->_worker_phase->{$w}->{$phase} // '') eq 'complete') {
+          $self->logger->debug(
+            "wid $wid detects wid $w has completed phase $phase");
           $done++;
-        } else {
-          $self->logger->debug(sprintf('wid %s detects wid %s has not completed phase "%s": %s',
-          $wid, $w, $phase, ($self->_worker_phase->{$w}->{$phase} // '') ));
+        }
+        else {
+          $self->logger->debug(sprintf(
+            'wid %s detects wid %s has not completed phase "%s": %s',
+            $wid, $w, $phase, ($self->_worker_phase->{$w}->{$phase} // '')
+          ));
         }
       }
     });

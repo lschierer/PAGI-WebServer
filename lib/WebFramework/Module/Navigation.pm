@@ -308,7 +308,7 @@ sub _generate_sitemap ($self, $base_url = '') {
 
     for my $segment (sort keys %$node) {
       my $current_path = $path . '/' . $segment;
-      my $data = $node->{$segment};
+      my $data         = $node->{$segment};
 
       # Skip if marked as no_sitemap
       next if $data->{no_sitemap};
@@ -316,14 +316,13 @@ sub _generate_sitemap ($self, $base_url = '') {
       # Add this path if it has a title (meaning it's a real route)
       if ($data->{title}) {
         my $full_url = $base_url . $current_path;
-        push @urls, sprintf(
-          "  <url>\n    <loc>%s</loc>\n  </url>",
-          xml_escape($full_url)
-        );
+        push @urls,
+          sprintf("  <url>\n    <loc>%s</loc>\n  </url>",
+          xml_escape($full_url));
       }
 
       # Recurse into children
-      if ($data->{children} && keys %{$data->{children}}) {
+      if ($data->{children} && keys %{ $data->{children} }) {
         $collect_paths->($data->{children}, $current_path);
       }
     }
