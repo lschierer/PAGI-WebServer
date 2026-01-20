@@ -18,5 +18,11 @@ sub logger {
   return $l;
 }
 
+# for backwards compatibility
+sub get_logger {
+  my $self = shift;
+  return $self->logger;
+}
+
 1;
 __END__
