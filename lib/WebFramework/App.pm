@@ -79,7 +79,7 @@ sub build ($self) {
         file => {
           'utf-8'  => true,
           filename => Path::Tiny::path(File::HomeDir::Tiny::home)
-            ->child(sprintf('/var/log/Perl/dist/%s/syslog',
+            ->child(sprintf('/var/log/Perl/dist/%s/system.log',
             $self->app->config->{config}->{log_base}))
             ->absolute->stringify,
         }
