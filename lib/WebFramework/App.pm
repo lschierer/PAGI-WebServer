@@ -27,6 +27,27 @@ has 'server' => (
   lazy => 1,
 );
 
+has pid_file => (
+  is      => 'ro',
+  lazy    => 1,
+  default => sub {
+    my $self = shift;
+    my $home = Path::Tiny::path(File::HomeDir::Tiny::home);
+
+    my $pid_file;
+
+    my $log_base = $self->app->config->{config}->{log_base};
+    if(defined($log_base) && length($log_base)){
+      $pid_file= $home->child("var/run/${log_base}.pid");
+    } else {
+      $pid_file = $home->child("var/run/${0}.pid");
+    }
+
+    $pid_file->parent->mkdir({ mode => 0750 });
+    return $pid_file;
+  }
+);
+
 has local_conf_dir => (
   default => sub {
     my $self = shift;
@@ -106,6 +127,10 @@ sub getConfig ($self, $env, $dirstring = undef) {
 
 sub run {
   my $self = shift;
+  my $pid_fh = $self->pid_file->openw_utf8;
+
+  print $pid_fh "$$\n";
+  close($pid_fh);
 
   my $pagi_stub = $self->SUPER::run();
 

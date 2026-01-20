@@ -15,6 +15,7 @@ my $builder = Module::Build->new(
     'Future'              => '0',
     'Future::AsyncAwait'  => '0',
     'Future::HTTP'        => '0',
+    'Future::XS'	  => '0',
     'GraphViz'            => '0',
     'GraphViz2'           => '0',
     'HTML::FromANSI'      => '0',
