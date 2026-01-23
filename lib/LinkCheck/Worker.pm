@@ -26,29 +26,6 @@ has field _loop => (
   }
 );
 
-has field _states => (
-  predicate   => -hidden,
-  is          => 'ro',
-  default     => sub {
-    return [qw(
-      unchecked fetching  pending-parse
-      parsing   parsed    validating
-      completed
-    )];
-  }
-)
-
-has field _stateCounts => (
-  predicate => -hidden,
-  is        => 'rw',
-  default   => sub ($self) {
-    state $sc;
-    foreach my $state ($self->_states->@*){
-      $sc->{$state} = 0;
-    }
-    return $sc;
-  }
-);
 
 sub mce_user_func ($self, $mce) {
   my ($pid, $wid) = (MCE->pid, MCE->wid);
