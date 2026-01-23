@@ -6,9 +6,11 @@ use utf8::all;
 use Mooish::Base -standard;
 extends 'LinkCheck::Common';
 require Future::HTTP;
+require Data::Printer;
 use Future;
 
 use IO::Async::Loop;
+use Net::Async::HTTP;
 use Mojo::DOM58;
 use Carp;
 
@@ -17,21 +19,230 @@ sub mce_user_func ($self, $mce, $internal_q, $external_q) {
   $self->_internal_q($internal_q);
   $self->_external_q($external_q);
 
-  my $max_internal = $mce->max_workers - 1;
-  if ($wid != $mce->max_workers) {
-    $self->main_internal_loop($mce, $pid, $wid);
-    $self->_wait_all($wid, 'main_internal_loop', $max_internal);
-  }
-  else {
-    #sleep once to let some links queue up so we don't just exit.
-    select(undef, undef, undef, 2);
+  $self->logger->notice("pid $pid; wid $wid; starting unified worker loop");
+
+  # Unified state machine loop
+  # States: unchecked -> fetching -> pending-parse -> parsing -> parsed -> validating -> completed
+
+  my $no_work_count = 0;
+  my @pending_futures;
+
+  while (1) {
+    my $did_work = 0;
+
+    # Phase 1: Fetch unchecked internal URLs
+    my @to_fetch = $self->_find_items_in_state($self->_internal_q, 'unchecked', 10);
+    for my $url (@to_fetch) {
+      $self->_phase_lock->synchronize(sub {
+        $self->_internal_q->{$url}->{state} = 'fetching';
+      });
+
+      push @pending_futures, $self->_fetch_internal_url($url);
+      $did_work = 1;
+    }
+
+    # Phase 2: Parse fetched pages
+    my @to_parse = $self->_find_items_in_state($self->_internal_q, 'pending-parse', 5);
+    for my $url (@to_parse) {
+      $self->_phase_lock->synchronize(sub {
+        $self->_internal_q->{$url}->{state} = 'parsing';
+      });
+      $self->_process_fetched_page($url);
+      $self->_phase_lock->synchronize(sub {
+        $self->_internal_q->{$url}->{state} = 'parsed';
+      });
+      $did_work = 1;
+    }
+
+    # Phase 3: Fetch unchecked external URLs
+    my @ext_to_fetch = $self->_find_items_in_state($self->_external_q, 'unchecked', 5);
+    for my $url (@ext_to_fetch) {
+      $self->_phase_lock->synchronize(sub {
+        $self->_external_q->{$url}->{state} = 'fetching';
+      });
+      push @pending_futures, $self->_fetch_external_url($url);
+      $did_work = 1;
+    }
+
+    # Phase 4: Only validate if there's nothing left to fetch or parse
+    my $ready_to_validate = (
+      !@to_fetch &&
+      !@to_parse &&
+      !@ext_to_fetch &&
+      !@pending_futures &&
+      !$self->_find_items_in_state($self->_internal_q, 'unchecked', 1) &&
+      !$self->_find_items_in_state($self->_internal_q, 'pending-parse', 1) &&
+      !$self->_find_items_in_state($self->_external_q, 'unchecked', 1)
+    );
+
+    if ($ready_to_validate) {
+      my @to_validate = $self->_find_items_in_state($self->_internal_q, 'parsed', 5);
+      for my $url (@to_validate) {
+        $self->_phase_lock->synchronize(sub {
+          $self->_internal_q->{$url}->{state} = 'validating';
+        });
+        $self->validate_links($url);
+        $self->_phase_lock->synchronize(sub {
+          $self->_internal_q->{$url}->{state} = 'completed';
+        });
+        $did_work = 1;
+      }
+    }
+
+    # Process event loop for pending futures
+    if (@pending_futures) {
+      $self->_loop->loop_once(0.01);
+      @pending_futures = grep { !$_->is_ready } @pending_futures;
+      $did_work = 1;
+    }
+
+    # Check if we're done - only exit when everything is completed
+    my $all_completed = 1;
+    for my $key ($self->_internal_q->keys()) {
+      if ($self->_internal_q->{$key}->{state} ne 'completed') {
+        $all_completed = 0;
+        last;
+      }
+    }
+
+    if ($all_completed) {
+      # Check external queue too
+      for my $key ($self->_external_q->keys()) {
+        if ($self->_external_q->{$key}->{state} ne 'completed') {
+          $all_completed = 0;
+          last;
+        }
+      }
+    }
+
+    if ($all_completed) {
+      $self->logger->notice("pid $pid; wid $wid; all items completed, exiting");
+      last;
+    }
+
+    # If we didn't do any work this iteration, sleep a bit
+    if (!$did_work && !@pending_futures) {
+      select(undef, undef, undef, 0.1);
+    }
   }
 
-  $self->main_external_loop($mce, $pid, $wid);
-  $self->_wait_all($wid, 'main_external_loop', $mce->max_workers);
-  $self->main_validation_loop($mce, $pid, $wid);
-  # make sure validation is done before we return control to the master.
-  $self->_wait_all($wid, 'main_validation_loop', $mce->max_workers);
+  $self->logger->notice("pid $pid; wid $wid; worker complete");
+}
+
+sub _find_items_in_state ($self, $queue, $state, $limit) {
+  my @items;
+  for my $key ($queue->keys()) {
+    last if @items >= $limit;
+    if ($queue->{$key}->{state} eq $state) {
+      push @items, $key;
+    }
+  }
+  return @items;
+}
+
+sub _fetch_internal_url ($self, $url) {
+  my $ua = $self->_ua;
+  return $ua->GET($url)->then(sub {
+    my ($response) = @_;
+    my $status = $response->code;
+    my $body = $response->decoded_content;
+
+    $self->_internal_q->{$url}->{http_status} = $status;
+
+    if ($status >= 200 && $status < 400 && defined($body)) {
+      $self->_host_lock->synchronize(sub {
+        $self->_internal_q->{$url}->{response_body} = $body;
+        $self->_internal_q->{$url}->{content_type} = $response->header('Content-Type');
+        $self->_internal_q->{$url}->{state} = 'pending-parse';
+        delete $self->_internal_q->{$url}->{retry_count};
+      });
+    } else {
+      $self->logger->warn("Internal link failed: $url (status $status)");
+      $self->_phase_lock->synchronize(sub {
+        $self->_internal_q->{$url}->{error} = "HTTP $status";
+        $self->_internal_q->{$url}->{state} = 'completed';
+      });
+    }
+    return Future->done;
+  })->catch(sub {
+    my ($error) = @_;
+
+    # Check if it's a timeout and retry
+    if ($error =~ /timed out/i) {
+      my $retry_count = $self->_internal_q->{$url}->{retry_count} // 0;
+      if ($retry_count < 2) {
+        $self->logger->warn("Internal link timeout: $url - retrying (attempt " . ($retry_count + 1) . ")");
+        $self->_host_lock->synchronize(sub {
+          $self->_internal_q->{$url}->{retry_count} = $retry_count + 1;
+          $self->_internal_q->{$url}->{state} = 'unchecked';  # Requeue
+        });
+        return Future->done;
+      }
+    }
+
+    $self->logger->error("Internal link error: $url - $error");
+    $self->_host_lock->synchronize(sub {
+      $self->_internal_q->{$url}->{error} = "$error";
+      $self->_internal_q->{$url}->{http_status} = 0;
+      $self->_internal_q->{$url}->{state} = 'completed';
+    });
+    return Future->done;
+  });
+}
+
+sub _fetch_external_url ($self, $url) {
+  my $ua = $self->_ua;
+  return $ua->HEAD($url)->then(sub {
+    my ($response) = @_;
+    my $status = $response->code;
+
+    $self->_external_q->{$url}->{http_status} = $status;
+
+    if ($status >= 200 && $status < 400) {
+      $self->logger->info("External link OK: $url (status $status)");
+      $self->_external_q->{$url}->{state} = 'completed';
+    } elsif ($status == 403 || $status == 405) {
+      # Retry with GET
+      return $ua->GET($url)->then(sub {
+        my ($response2) = @_;
+        my $status2 = $response2->code;
+        $self->_external_q->{$url}->{http_status} = $status2;
+
+        if ($status2 >= 200 && $status2 < 400) {
+          $self->logger->info("External link OK (via GET): $url (status $status2)");
+        } else {
+          $self->logger->warn("External link failed: $url (status $status2)");
+          $self->_external_q->{$url}->{error} = "HTTP $status2";
+        }
+        $self->_external_q->{$url}->{state} = 'completed';
+        return Future->done;
+      });
+    } else {
+      $self->logger->warn("External link failed: $url (status $status)");
+      $self->_external_q->{$url}->{error} = "HTTP $status";
+      $self->_external_q->{$url}->{state} = 'completed';
+    }
+    return Future->done;
+  })->catch(sub {
+    my ($error) = @_;
+
+    # Check if it's a timeout and retry
+    if ($error =~ /timed out/i) {
+      my $retry_count = $self->_external_q->{$url}->{retry_count} // 0;
+      if ($retry_count < 2) {
+        $self->logger->warn("External link timeout: $url - retrying (attempt " . ($retry_count + 1) . ")");
+        $self->_external_q->{$url}->{retry_count} = $retry_count + 1;
+        $self->_external_q->{$url}->{state} = 'unchecked';  # Requeue
+        return Future->done;
+      }
+    }
+
+    $self->logger->error("External link error: $url - $error");
+    $self->_external_q->{$url}->{error} = "$error";
+    $self->_external_q->{$url}->{http_status} = 0;
+    $self->_external_q->{$url}->{state} = 'completed';
+    return Future->done;
+  });
 }
 
 sub _loop ($self) {
@@ -42,26 +253,26 @@ sub _loop ($self) {
 sub _ua ($self) {
   state $ua;
 
-  return $ua //= Future::HTTP->new(
-    timeout       => $self->request_timeout // 30,
-    max_redirects => 5,
-    loop          => $self->_loop,
-    user_agent    =>
-'Mozilla/5.0 (compatible; LinkChecker/1.0; +https://github.com/lschierer/PAGI-WebServer)',
+  unless ($ua) {
+    # Initialize the specific Net::Async::HTTP client
+    $ua = Net::Async::HTTP->new(
+      user_agent    => 'Mozilla/5.0 (compatible; LinkChecker/1.0; +https://github.com)',
+      timeout       => 300,
+      max_redirects => 5,
+      max_connections_per_host  => 1,  # Reduced to avoid timeouts
+      pipeline => 0,  # Disable pipelining to avoid spurious reads
+      stall_timeout => 60,
+      close_after_request => 1,
+    );
 
-    # Only needed if you hit self-signed local https.
-    # Better: gate this on host =~ /^(?:localhost|127\.0\.0\.1)$/
-    # tls_options  => { SSL_verify_mode => 0 },
-  );
+    # Add it to your IO::Async::Loop
+    $self->_loop->add($ua);
+  }
+
+  return $ua;
 }
 
-sub _status_from_headers ($headers) {
-  return 0 unless $headers && ref($headers) eq 'HASH';
-  my $s = $headers->{Status} // $headers->{status} // $headers->{code} // 0;
-  $s += 0 if defined $s;    # numeric
-  return $s;
-}
-
+# OLD LOOPS - NO LONGER USED
 sub main_external_loop ($self, $mce, $pid, $wid) {
   $self->logger->notice('Start of main_external_loop');
   $self->_mark_phase($wid, 'main_external_loop', 'started');
@@ -74,7 +285,6 @@ sub main_external_loop ($self, $mce, $pid, $wid) {
     # Claim multiple URLs up to a batch size
     my $batch_size = $self->external_batch_size // 10;
 
-    $self->_host_lock->lock;
     my @all_keys = $self->_external_q->keys();
     my @unchecked =
       sort grep { $self->_external_q->{$_}->{state} eq 'unchecked' } @all_keys;
@@ -97,9 +307,11 @@ sub main_external_loop ($self, $mce, $pid, $wid) {
       next if $inflight >= $self->external_host_slots;
 
       # Claim this URL
-      $self->_external_q->{$key}->{state}      = 'in-progress';
-      $self->_external_q->{$key}->{claimed_at} = $now;
-      $self->_external_q->{$key}->{claimed_by} = "$pid/$wid";
+      $self->_host_lock->synchronize(sub {
+        $self->_external_q->{$key}->{state}      = 'in-progress';
+        $self->_external_q->{$key}->{claimed_at} = $now;
+        $self->_external_q->{$key}->{claimed_by} = "$pid/$wid";
+      });
 
       $self->_host_inflight->{$host} = $inflight + 1;
       my $jitter = rand($self->external_jitter);
@@ -110,7 +322,6 @@ sub main_external_loop ($self, $mce, $pid, $wid) {
       $self->logger->debug("pid $pid; wid $wid; claimed key $key");
     }
 
-    $self->_host_lock->unlock;
 
     # Start async requests for claimed URLs
     for my $key (@claimed) {
@@ -123,19 +334,43 @@ sub main_external_loop ($self, $mce, $pid, $wid) {
       $self->_loop->loop_once(0.01);
 
       # Remove completed futures
+      my $before = scalar @pending_futures;
       @pending_futures = grep { !$_->is_ready } @pending_futures;
+      my $after = scalar @pending_futures;
+      if ($before != $after) {
+        $self->logger->debug("pid $pid; wid $wid; completed " . ($before - $after) . " futures, $after remaining");
+      }
     }
     elsif (@in_progress) {
       $no_work_count = 0;
-      select(undef, undef, undef, 0.1);
+
+      # Check for stuck items (claimed more than 2 minutes ago)
+      my $now = time;
+      my $stuck_count = 0;
+      for my $key (@in_progress) {
+        my $claimed_at = $self->_external_q->{$key}->{claimed_at} // $now;
+        if ($now - $claimed_at > 120) {
+          $self->logger->warn("pid $pid; wid $wid; marking stuck external link as failed: $key");
+          $self->_external_q->{$key}->{state} = 'checked';
+          $self->_external_q->{$key}->{error} = 'Timeout - stuck in progress';
+          $stuck_count++;
+        }
+      }
+
+      if ($stuck_count > 0) {
+        $self->logger->info("pid $pid; wid $wid; marked $stuck_count stuck items as failed");
+      } else {
+        $self->logger->debug("pid $pid; wid $wid; waiting for " . scalar(@in_progress) . " in-progress items");
+        select(undef, undef, undef, 1.0);  # Wait longer when no work
+      }
     }
     else {
       $no_work_count++;
       $self->logger->debug(
         "pid $pid; wid $wid; no work found (count: $no_work_count)");
-      select(undef, undef, undef, 0.1) if $no_work_count < 3;
+      select(undef, undef, undef, 30) if $no_work_count < ($mce->max_workers * 2);
     }
-  } while (@pending_futures || @in_progress || $no_work_count < 3);
+  } while (@pending_futures || @in_progress || $no_work_count < ($mce->max_workers * 2));
 
   $self->_mark_phase($wid, 'main_external_loop', 'complete');
 }
@@ -182,10 +417,37 @@ sub main_internal_loop ($self, $mce, $pid, $wid) {
     if (@pending_futures) {
       $self->_loop->loop_once(0.01);
       @pending_futures = grep { !$_->is_ready } @pending_futures;
+
+      # Process any pages that need processing (but limit to avoid blocking too long)
+      my $processed = 0;
+      my @all_keys = $self->_internal_q->keys();
+      for my $url (@all_keys) {
+        last if $processed >= 5;  # Process max 5 per iteration
+        next unless $self->_internal_q->{$url}->{needs_processing};
+
+        $self->_process_fetched_page($url);
+        $processed++;
+      }
     }
     elsif (@in_progress) {
       $no_work_count = 0;
-      select(undef, undef, undef, 0.1);
+
+      # Check for stuck items (claimed more than 2 minutes ago)
+      my $now = time;
+      my $stuck_count = 0;
+      for my $key (@in_progress) {
+        my $claimed_at = $self->_internal_q->{$key}->{claimed_at} // $now;
+        if ($now - $claimed_at > 120) {
+          $self->logger->warn("pid $pid; wid $wid; marking stuck internal link as failed: $key");
+          $self->_internal_q->{$key}->{state} = 'checked';
+          $self->_internal_q->{$key}->{error} = 'Timeout - stuck in progress';
+          $stuck_count++;
+        }
+      }
+
+      if ($stuck_count == 0) {
+        select(undef, undef, undef, 0.1);
+      }
     }
     else {
       $no_work_count++;
@@ -197,6 +459,64 @@ sub main_internal_loop ($self, $mce, $pid, $wid) {
 
   $self->_mark_phase($wid, 'main_internal_loop', 'complete');
   $self->logger->info("pid $pid; wid $wid; exiting - no more work");
+}
+
+sub _process_fetched_page ($self, $url) {
+  my $body = $self->_internal_q->{$url}->{response_body};
+  my $content_type = $self->_internal_q->{$url}->{content_type} // '';
+
+  # Skip processing for non-HTML content (but assume HTML if no content-type)
+  if ($content_type && $content_type !~ m{text/html}i) {
+    $self->logger->debug("Skipping non-HTML content: $url ($content_type)");
+    $self->_internal_q->{$url}->{pending_internal_links} = [];
+    $self->_internal_q->{$url}->{pending_external_links} = [];
+    $self->_internal_q->{$url}->{pending_anchor_refs} = [];
+    $self->_internal_q->{$url}->{possible_anchors} = [];
+    delete $self->_internal_q->{$url}->{response_body};
+    delete $self->_internal_q->{$url}->{content_type};
+    return;
+  }
+
+  my $headers = {
+    Status => $self->_internal_q->{$url}->{http_status},
+    'content-type' => $content_type || 'text/html',
+  };
+
+  my $extracted = $self->process_url($url, $body, $headers);
+
+  $self->_internal_q->{$url}->{pending_internal_links} = $extracted->{internal_links};
+  $self->_internal_q->{$url}->{pending_external_links} = $extracted->{external_links};
+  $self->_internal_q->{$url}->{pending_anchor_refs} = $extracted->{anchor_refs};
+  $self->_internal_q->{$url}->{possible_anchors} = $extracted->{anchors};
+
+  foreach my $link (@{ $extracted->{internal_links} }) {
+    if ($link =~ /^\//) {
+      $link = sprintf('%s%s', $self->base->{url}, $link);
+    }
+    my $uri  = URI->new($link);
+    my $host = $uri->clone;
+    $host->fragment(undef);
+    $host->query(undef);
+
+    my $base_url = $self->canon_url($host->as_string) // next;
+    unless (exists $self->_internal_q->{$base_url}) {
+      $self->_internal_q->{$base_url} = $self->_new_queue_item();
+    }
+  }
+
+  for my $ext (@{ $extracted->{external_links} // [] }) {
+    my $canon = $self->canon_url($ext) // next;
+
+    next if URI->new($canon)->host && lc(URI->new($canon)->host) eq $self->base->{host};
+
+    unless ($self->_external_q->exists($canon)) {
+      $self->_external_q->{$canon} = $self->_new_queue_item();
+    }
+  }
+
+  # Clean up stored response data
+  delete $self->_internal_q->{$url}->{response_body};
+  delete $self->_internal_q->{$url}->{content_type};
 }
 
 sub check_external_url_async ($self, $url) {
@@ -227,10 +547,10 @@ sub check_external_url_async ($self, $url) {
     $self->_external_q->{$url}->{state} = 'checked';
   };
 
-  return $ua->http_head($url)->then(sub {
-    my ($body, $headers) = @_;
+  return $ua->HEAD($url)->then(sub {
+    my ($response) = @_;
 
-    my $status = _status_from_headers($headers);
+    my $status = $response->code;
     $self->_external_q->{$url}->{http_status} = $status;
 
     if ($status >= 200 && $status < 400) {
@@ -238,9 +558,9 @@ sub check_external_url_async ($self, $url) {
       return Future->done;
     }
     elsif ($status == 403 || $status == 405) {
-      return $ua->http_get($url)->then(sub {
-        my ($body2, $headers2) = @_;
-        my $status2 = $headers2->{Status} // 0;
+      return $ua->GET($url)->then(sub {
+        my ($response2) = @_;
+        my $status2 = $response2->code;
         $self->_external_q->{$url}->{http_status} = $status2;
         if ($status2 >= 200 && $status2 < 400) {
           $self->logger->info(
@@ -262,6 +582,7 @@ sub check_external_url_async ($self, $url) {
     $self->logger->error("External link error: $url - $error");
     $self->_external_q->{$url}->{error}       = "$error";
     $self->_external_q->{$url}->{http_status} = 0;
+    return Future->done;
   })->then(sub {
     $cleanup->();
     return Future->done;
@@ -286,59 +607,36 @@ sub get_internal_url_async($self, $url) {
   say $msg if ($self->verbose);
   $self->logger->info($msg);
   my $ua = $self->_ua;
-  return $ua->http_get($url)->then(sub {
-    my ($body, $headers) = @_;
+  return $ua->GET($url)->then(sub {
+    my ($response) = @_;
 
-    my $status = _status_from_headers($headers);
+    my $status = $response->code;
+    my $body = $response->decoded_content;
+    my $headers = {
+      Status => $status,
+      'content-type' => $response->header('Content-Type'),
+    };
+
     $self->_internal_q->{$url}->{http_status} = $status;
 
     if ($status >= 200 && $status < 400) {
-      my $extracted = $self->process_url($url, $body, $headers);
-
-      $self->_internal_q->{$url}->{pending_internal_links} =
-        $extracted->{internal_links};
-      $self->_internal_q->{$url}->{pending_external_links} =
-        $extracted->{external_links};
-      $self->_internal_q->{$url}->{pending_anchor_refs} =
-        $extracted->{anchor_refs};
-      $self->_internal_q->{$url}->{possible_anchors} = $extracted->{anchors};
-
-      foreach my $link (@{ $extracted->{internal_links} }) {
-        if ($link =~ /^\//) {
-          $link = sprintf('%s%s', $self->base->{url}, $link);
-        }
-        my $uri  = URI->new($link);
-        my $host = $uri->clone;
-        $host->fragment(undef);
-        $host->query(undef);
-
-        my $base_url = $self->canon_url($host->as_string) // next;
-        unless (exists $self->_internal_q->{$base_url}) {
-          $self->_internal_q->{$base_url} = $self->_new_queue_item;
-        }
-      }
-
-      for my $ext (@{ $extracted->{external_links} // [] }) {
-        my $canon = $self->canon_url($ext) // next;
-
-        next
-          if URI->new($canon)->host
-          && lc(URI->new($canon)->host) eq $self->base->{host};
-
-        unless ($self->_external_q->exists($canon)) {
-          $self->_external_q->{$canon} = $self->_new_queue_item;
-        }
-      }
+      # Store the response for later processing - don't block here
+      $self->_internal_q->{$url}->{response_body} = $body;
+      $self->_internal_q->{$url}->{response_headers} = $headers;
+      $self->_internal_q->{$url}->{needs_processing} = 1;
+      return Future->done;
     }
     else {
       $self->logger->warn("Internal link failed: $url (status $status)");
       $self->_internal_q->{$url}->{error} = "HTTP $status";
+      return Future->done;
     }
   })->catch(sub {
     my ($error) = @_;
     $self->logger->error("Internal link error: $url - $error");
     $self->_internal_q->{$url}->{error}       = "$error";
     $self->_internal_q->{$url}->{http_status} = 0;
+    return Future->done;
   })->then(sub {
     $self->_internal_q->{$url}->{state} = 'checked';
     return Future->done;
@@ -354,6 +652,18 @@ sub process_url ($self, $url, $body, $headers) {
   my $base_root = $self->base->{url}->as_string;    # e.g. https://example.com
 
   my (@internal, @external, @anchor_refs, @anchors);
+
+  unless(defined($body) && length($body)){
+    $self->logger->error("invalid body for url '$url' in process_url" );
+    $self->logger->debug(sprintf('body of invalid url "%s" is %s', $url, defined($body) ? ref($body) : 'undef'));
+    # return a valid shape to preserve the api
+    return {
+      internal_links => [],
+      external_links => [],
+      anchor_refs    => [],
+      anchors        => [],
+    };
+  }
 
   # --------
   # 1) DOM parse (forgiving)
@@ -546,11 +856,40 @@ sub main_validation_loop ($self, $mce, $pid, $wid) {
 sub validate_links ($self, $url) {
   my $entry = $self->_internal_q->{$url};
 
+  # Defensive: ensure arrays are initialized
+  unless(ref($entry->{broken_internal_links}) && $entry->{broken_internal_links}->isa('MCE::Shared::Object')){
+    $self->logger->error(sprintf('url "%s" has an invalid broken_internal_links attribute in _internal_q: %s',
+    $url, Data::Printer::np($entry->{broken_internal_links})));
+  }
+  $entry->{broken_internal_links} //= [];
+  unless(ref($entry->{broken_external_links}) && $entry->{broken_external_links}->isa('MCE::Shared::Object')){
+    $self->logger->error(sprintf('url "%s" has an invalid broken_external_links attribute in _internal_q: %s',
+    $url, Data::Printer::np($entry->{broken_external_links})));
+  }
+  $entry->{successfull_internal_links} //= [];
+  unless(ref($entry->{successfull_internal_links}) && $entry->{broken_external_links}->isa('MCE::Shared::Object')){
+    $self->logger->error(sprintf('url "%s" has an invalid successfull_internal_links attribute in _internal_q: %s',
+    $url, Data::Printer::np($entry->{successfull_internal_links})));
+  }
+  $entry->{successfull_internal_links} //= [];
+  unless(ref($entry->{successfull_external_links}) && $entry->{broken_external_links}->isa('MCE::Shared::Object')){
+    $self->logger->error(sprintf('url "%s" has an invalid successfull_external_links attribute in _internal_q: %s',
+    $url, Data::Printer::np($entry->{successfull_external_links})));
+  }
+  $entry->{successfull_external_links} //= [];
+
+  $self->logger->debug(sprintf(
+  'validating "%s" with %s pending links, %s broken internal and %s broken external'
+  , $url,
+  scalar(@{ $entry->{pending_internal_links} } ) + scalar( @{ $entry->{pending_external_links} } ),
+  scalar( @{ $entry->{broken_internal_links} } ),
+  scalar( @{ $entry->{broken_external_links} } ) ));
+
   # Validate internal links
   foreach my $link (@{ $entry->{pending_internal_links} }) {
     my $canon = $self->canon_url($link);
     if ( $self->_internal_q->exists($canon)
-      && $self->_internal_q->{$canon}->{state} eq 'checked'
+      && $self->_internal_q->{$canon}->{state} eq 'completed'
       && !$self->_internal_q->{$canon}->{error}) {
       my $status = $self->_internal_q->{$canon}->{http_status} // 0;
       if ($status >= 200 && $status < 400) {
@@ -561,6 +900,14 @@ sub validate_links ($self, $url) {
       }
     }
     else {
+      # Debug why link is marked as broken
+      if (!$self->_internal_q->exists($canon)) {
+        $self->logger->debug("Link $link marked broken: not in queue (canon: $canon)");
+      } elsif ($self->_internal_q->{$canon}->{state} ne 'completed') {
+        $self->logger->debug("Link $link marked broken: state is " . $self->_internal_q->{$canon}->{state});
+      } elsif ($self->_internal_q->{$canon}->{error}) {
+        $self->logger->debug("Link $link marked broken: has error " . $self->_internal_q->{$canon}->{error});
+      }
       push @{ $entry->{broken_internal_links} }, $link;
     }
   }
@@ -569,7 +916,7 @@ sub validate_links ($self, $url) {
   foreach my $link (@{ $entry->{pending_external_links} }) {
     my $canon = $self->canon_url($link);
     if ( $self->_external_q->exists($canon)
-      && $self->_external_q->{$canon}->{state} eq 'checked'
+      && $self->_external_q->{$canon}->{state} eq 'completed'
       && !$self->_external_q->{$canon}->{error}) {
       my $status = $self->_external_q->{$canon}->{http_status} // 0;
       if ($status >= 200 && $status < 400) {

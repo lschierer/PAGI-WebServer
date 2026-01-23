@@ -9,6 +9,7 @@ require MCE::Shared;
 require Future::HTTP;
 require IO::FDPass;
 require Path::Tiny;
+require Net::HTTPS::NB;
 use File::HomeDir::Tiny ();
 use Log::Handler;
 use MCE::Loop;
