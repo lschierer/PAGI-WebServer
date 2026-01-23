@@ -16,9 +16,10 @@ sub execute ($self) {
   $self->start($self->canon_url($self->start));
 
   $self->logger->debug("base host is " . $self->base->{host});
-  say "About to store queue item for: " . $self->start->as_string;
+  my $start_url_str = $self->start->as_string;
+  say "About to store queue item for: $start_url_str";
   say "Queue item type: " . ref($self->_new_queue_item());
-  $self->_internal_q->{ $self->start->as_string } = $self->_new_queue_item();
+  $self->_internal_q->set($start_url_str, $self->_new_queue_item());
 
   # Extract constructor params - don't capture $self in closure
   my $start_url        = $self->start->as_string;
@@ -33,9 +34,11 @@ sub execute ($self) {
   my $verbose          = $self->verbose;
   my $internal_q       = $self->_internal_q;
   my $host_lock        = $self->_host_lock;
+  my $phase_lock       = $self->_phase_lock;
 
   my $mce = MCE->new(
     max_workers => $workers,
+    job_delay   => 0.060,
     user_func   => sub {
       my ($mce) = @_;
 
@@ -54,13 +57,15 @@ sub execute ($self) {
       # Set base_url and base_host that were computed in main instance
 
       # Use the shared queue and lock from the parent
-      $worker_app->_internal_q($self->_internal_q);
       $worker_app->_external_q($self->_external_q);
-      $worker_app->_worker_phase($self->_worker_phase);
-      $worker_app->_phase_lock($self->_phase_lock);
+      $worker_app->_host_inflight($self->_host_inflight);
       $worker_app->_host_lock($self->_host_lock);
+      $worker_app->_host_next_time($self->_host_next_time);
+      $worker_app->_internal_q($self->_internal_q);
+      $worker_app->_phase_lock($self->_phase_lock);
+      $worker_app->_stateCounts($self->_stateCounts);
 
-      $worker_app->mce_user_func($mce, $self->_internal_q, $self->_external_q);
+      $worker_app->mce_user_func($mce);
     },
     max_retries => $max_retries,
   );

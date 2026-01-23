@@ -17,8 +17,11 @@ use MCE::Queue;
 use MCE;
 use Sereal::Decoder;
 use Sereal::Encoder;
-use Time::HiRes qw(time sleep);
+use Time::HiRes  qw(time sleep);
+use Scalar::Util qw(blessed);
 use URI;
+use Type::Utils qw(declare);
+use Types::Standard qw(Enum);
 
 use Carp;
 
@@ -60,9 +63,20 @@ has logger => (
   }
 );
 
+our $STATES = [qw(
+  unchecked fetching  pending-parse
+  parsing   parsed    validating
+  completed
+)];
+
+declare 'LinkCheckState',
+  as Enum[
+    $STATES->@*
+  ];
+
 has start => (
   required => 1,
-  is       => 'rw',
+  is       => 'ro',
   coerce   => sub {
     my $val = shift;
     return ref($val) eq 'URI' ? $val : URI->new($val);
@@ -145,65 +159,6 @@ has base => (
   }
 );
 
-has _internal_pending_count => (
-  default => 0,
-  is      => 'rw',
-);
-
-has _internal_q => (
-  default => sub {
-    my @data = ();
-    return MCE::Shared->hash({ _DEEPLY_ => 1, });
-
-  },
-  is => 'rw',
-);
-
-has _external_q => (
-  default => sub {
-    my @data = ();
-    return MCE::Shared->hash({ _DEEPLY_ => 1, });
-
-  },
-  is => 'rw',
-);
-
-has _worker_phase => (
-  default => sub {
-    my @data = ();
-    return MCE::Shared->hash({ _DEEPLY_ => 1, });
-
-  },
-  is => 'rw',
-);
-
-has _phase_lock => (
-  default => sub { return MCE::Mutex->new },
-  lazy    => 1,
-  is      => 'rw',
-);
-
-has _broken => (
-  default => sub { {} },
-  is      => 'rw',
-);
-
-has _host_lock => (
-  default => sub { return MCE::Mutex->new },
-  lazy    => 1,
-  is      => 'rw',
-);
-
-has _host_next_time => (
-  is      => 'rw',
-  default => sub { MCE::Shared->hash() },
-);
-
-has _host_inflight => (
-  is      => 'rw',
-  default => sub { MCE::Shared->hash() },
-);
-
 has external_min_interval => (is => 'ro', default => 1.0)
   ;    # seconds between requests per host
 has external_jitter => (is => 'ro', default => 0.2);  # random 0..jitter seconds
@@ -214,10 +169,16 @@ has external_batch_size => (is => 'ro', default => 10)
 has internal_batch_size => (is => 'ro', default => 20)
   ;    # URLs to claim per worker iteration for internal links
 
+has _broken => (
+  default => sub { {} },
+  is      => 'rw',
+);
+
 # Do not access directly, access via
 # $self->_new_queue_item;
-has _queue_item => (
-  default => sub {
+has field _queue_item => (
+  is          => 'ro',
+  default     => sub {
     return {
       pending_internal_links     => [],
       pending_external_links     => [],
@@ -233,27 +194,73 @@ has _queue_item => (
       state                      => 'unchecked',
     };
   },
-  is => 'ro',
+
 );
 
 sub _new_queue_item ($self) {
-  $self->_internal_pending_count($self->_internal_pending_count + 1);
-  # Return a plain hash - don't reference $self->_queue_item which has code refs
-  return {
-    pending_internal_links     => [],
-    pending_external_links     => [],
-    possible_anchors           => [],
-    pending_anchor_refs        => [],
-    successfull_internal_links => [],
-    successfull_external_links => [],
-    successfull_anchor_refs    => [],
-    broken_internal_links      => [],
-    broken_external_links      => [],
-    broken_anchors             => [],
-    broken_anchor_refs         => [],
-    state                      => 'unchecked',
-  };
+  $self->_stateCounts->incr('unchecked');
+  return $self->_queue_item;
 }
+
+### Stateful/Shared variables ###
+
+has field _stateCounts => (
+  is        => 'rw',
+  default   => sub ($self) {
+    new $sc = MCE::Shared->hash();
+    foreach my $state ($STATES->@*){
+      $sc->set($state, 0);
+    }
+    return $sc;
+  }
+);
+
+has field _internal_q => (
+  is        => 'rw',
+  default => sub {
+    my @data = ();
+    return MCE::Shared->hash({ _DEEPLY_ => 1 });
+  },
+);
+
+has field _external_q => (
+  is        => 'rw',
+  default => sub {
+    my @data = ();
+    return MCE::Shared->hash({ _DEEPLY_ => 1 });
+  },
+);
+
+has field _worker_phase => (
+  default => sub {
+    my @data = ();
+    return MCE::Shared->hash({ _DEEPLY_ => 1, });
+
+  },
+  is => 'rw',
+);
+
+has field _phase_lock => (
+  default => sub { return MCE::Mutex->new },
+  is      => 'ro',
+);
+
+has field _host_lock => (
+  default => sub { return MCE::Mutex->new },
+  is      => 'ro',
+);
+
+has field _host_next_time => (
+  is      => 'rw',
+  default => sub { MCE::Shared->hash() },
+);
+
+has field _host_inflight => (
+  is      => 'rw',
+  default => sub { MCE::Shared->hash() },
+);
+
+### TODO: Find better place for these.
 
 sub canon_url ($self, $u) {
   return undef unless defined $u && length $u;
@@ -282,17 +289,6 @@ sub canon_url ($self, $u) {
   $uri->path($path);
 
   return $uri->as_string;
-}
-
-sub _mark_phase ($self, $wid, $phase, $value) {
-  $self->_phase_lock->synchronize(sub {
-    my $cur = $self->_worker_phase->{$wid}->{$phase} // '';
-
-    my %rank = ('' => 0, started => 1, complete => 2);
-    if ($rank{$value} > ($rank{$cur} // 0)) {
-      $self->_worker_phase->{$wid}->{$phase} = $value;
-    }
-  });
 }
 
 sub _wait_all ($self, $wid, $phase, $total_workers) {

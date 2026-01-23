@@ -15,7 +15,7 @@ my $builder = Module::Build->new(
     'Future'              => '0',
     'Future::AsyncAwait'  => '0',
     'Future::HTTP'        => '0',
-    'Future::XS'	  => '0',
+    'Future::XS'          => '0',
     'GraphViz'            => '0',
     'GraphViz2'           => '0',
     'HTML::FromANSI'      => '0',
@@ -30,7 +30,7 @@ my $builder = Module::Build->new(
     'MCE::Flow'           => '0',
     'MCE::Mutex'          => '0',
     'MCE::Queue'          => '0',
-    'MCE::Shared'         => '0',
+    'MCE::Shared'         => '1.841',
     'Mooish::Base'        => '0',
     'Mojo::DOM58'         => '0',
     'Net::Async::HTTP'    => '0',
@@ -76,7 +76,7 @@ my $builder = Module::Build->new(
   },
   # Mojolicious to provide Mojo::DOM
   test_requires => {
-    'Test2::V0'   => '0',
+    'Test2::V0' => '0',
   },
   add_to_cleanup     => ['PAGI-WebServer-*'],
   create_makefile_pl => 'traditional',
