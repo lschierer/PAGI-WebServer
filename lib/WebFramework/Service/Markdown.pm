@@ -10,7 +10,7 @@ use Encode   qw(encode_utf8);
 require Mojo::DOM58;
 
 has pd => (
-  is => 'lazy',
+  is      => 'lazy',
   default => sub {
     my $self = shift;
     my $pd   = Pandoc->new;
@@ -105,79 +105,79 @@ sub render_with_frontmatter {
 }
 
 sub spectrum_formatting ($c, $html_content) {
-    my $dom = Mojo::DOM58->new($html_content);
+  my $dom = Mojo::DOM58->new($html_content);
 
-    my %spectrum_h = (
-      h1 => "spectrum-Heading spectrum-Heading--sizeXXL",
-      h2 => "spectrum-Heading spectrum-Heading--sizeXL",
-      h3 => "spectrum-Heading spectrum-Heading--sizeL",
-      h4 => "spectrum-Heading spectrum-Heading--sizeM",
-      h5 => "spectrum-Heading spectrum-Heading--sizeS",
-      h6 => "spectrum-Heading spectrum-Heading--sizeXS",
-    );
+  my %spectrum_h = (
+    h1 => "spectrum-Heading spectrum-Heading--sizeXXL",
+    h2 => "spectrum-Heading spectrum-Heading--sizeXL",
+    h3 => "spectrum-Heading spectrum-Heading--sizeL",
+    h4 => "spectrum-Heading spectrum-Heading--sizeM",
+    h5 => "spectrum-Heading spectrum-Heading--sizeS",
+    h6 => "spectrum-Heading spectrum-Heading--sizeXS",
+  );
 
-    # Add header classes
-    for my $tag (keys %spectrum_h) {
-      $dom->find($tag)->each(sub { $_->attr(class => $spectrum_h{$tag}) });
-    }
-
-    # Add paragraph classes
-    $dom->find('p')->each(sub {
-      $_->attr(
-        class => "spectrum-Body spectrum-Body--serif spectrum-Body--sizeM");
-    });
-
-    # Add list item classes
-    $dom->find('li')->each(sub {
-      $_->attr(
-        class => "spectrum-Body spectrum-Body--serif spectrum-Body--sizeM");
-    });
-
-    # Add link classes
-    $dom->find('a')->each(sub {
-      $_->attr(
-        class => "spectrum-Link spectrum-Link--primary spectrum-Link--quiet");
-    });
-
-    # Add emphasis class
-    $dom->find('em')->each(sub {
-      $_->attr(class => "spectrum-Body-emphasized");
-    });
-
-    # Add strong class
-    $dom->find('strong')->each(sub {
-      $_->attr(class => "spectrum-Body-strong");
-    });
-
-    $dom->find('hr')->each(sub {
-      $_->attr(class => 'spectrum-Divider spectrum-Divider--sizeM');
-    });
-
-    # Add table classes
-    $dom->find('table')->each(sub {
-      $_->attr(class => 'spectrum-Table spectrum-Table--sizeM');
-    });
-
-    $dom->find('thead')->each(sub {
-      $_->attr(class => 'spectrum-Table-head');
-    });
-
-    $dom->find('tbody')->each(sub {
-      $_->attr(class => 'spectrum-Table-body');
-    });
-
-    $dom->find('th')->each(sub {
-      $_->attr(class => 'spectrum-Table-headCell');
-    });
-
-    $dom->find('td')->each(sub {
-      $_->attr(class => 'spectrum-Table-cell');
-    });
-
-    $dom->find('tr')->each(sub {
-      $_->attr(class => 'spectrum-Table-row');
-    });
-
-    return $dom->to_string;
+  # Add header classes
+  for my $tag (keys %spectrum_h) {
+    $dom->find($tag)->each(sub { $_->attr(class => $spectrum_h{$tag}) });
   }
+
+  # Add paragraph classes
+  $dom->find('p')->each(sub {
+    $_->attr(
+      class => "spectrum-Body spectrum-Body--serif spectrum-Body--sizeM");
+  });
+
+  # Add list item classes
+  $dom->find('li')->each(sub {
+    $_->attr(
+      class => "spectrum-Body spectrum-Body--serif spectrum-Body--sizeM");
+  });
+
+  # Add link classes
+  $dom->find('a')->each(sub {
+    $_->attr(
+      class => "spectrum-Link spectrum-Link--primary spectrum-Link--quiet");
+  });
+
+  # Add emphasis class
+  $dom->find('em')->each(sub {
+    $_->attr(class => "spectrum-Body-emphasized");
+  });
+
+  # Add strong class
+  $dom->find('strong')->each(sub {
+    $_->attr(class => "spectrum-Body-strong");
+  });
+
+  $dom->find('hr')->each(sub {
+    $_->attr(class => 'spectrum-Divider spectrum-Divider--sizeM');
+  });
+
+  # Add table classes
+  $dom->find('table')->each(sub {
+    $_->attr(class => 'spectrum-Table spectrum-Table--sizeM');
+  });
+
+  $dom->find('thead')->each(sub {
+    $_->attr(class => 'spectrum-Table-head');
+  });
+
+  $dom->find('tbody')->each(sub {
+    $_->attr(class => 'spectrum-Table-body');
+  });
+
+  $dom->find('th')->each(sub {
+    $_->attr(class => 'spectrum-Table-headCell');
+  });
+
+  $dom->find('td')->each(sub {
+    $_->attr(class => 'spectrum-Table-cell');
+  });
+
+  $dom->find('tr')->each(sub {
+    $_->attr(class => 'spectrum-Table-row');
+  });
+
+  return $dom->to_string;
+}
 1;

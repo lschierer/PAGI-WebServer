@@ -37,9 +37,10 @@ has pid_file => (
     my $pid_file;
 
     my $log_base = $self->app->config->{config}->{log_base};
-    if(defined($log_base) && length($log_base)){
-      $pid_file= $home->child("var/run/${log_base}.pid");
-    } else {
+    if (defined($log_base) && length($log_base)) {
+      $pid_file = $home->child("var/run/${log_base}.pid");
+    }
+    else {
       $pid_file = $home->child("var/run/${0}.pid");
     }
 
@@ -126,7 +127,7 @@ sub getConfig ($self, $env, $dirstring = undef) {
 }
 
 sub run {
-  my $self = shift;
+  my $self   = shift;
   my $pid_fh = $self->pid_file->openw_utf8;
 
   print $pid_fh "$$\n";
