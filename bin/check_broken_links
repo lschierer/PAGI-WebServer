@@ -41,6 +41,7 @@ GetOptions(
 pod2usage(1) if $opt{help};
 pod2usage("--msg=--start is required", 2) unless $opt{start};
 
+
 my $checker = LinkCheck::App->new(%opt);
 my $exit = $checker->execute;
 

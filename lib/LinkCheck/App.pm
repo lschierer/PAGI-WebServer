@@ -6,7 +6,8 @@ use Mooish::Base -standard;
 with 'LinkCheck::Role::Logger';
 with 'LinkCheck::Role::State';
 with 'LinkCheck::Role::Fetcher';
-use LinkCheck::Util::URL qw(canon_uri canon_url_string);
+with 'LinkCheck::Role::Validator';
+use LinkCheck::Util qw(canon_uri canon_url_string);
 
 require Path::Tiny;
 
@@ -20,13 +21,32 @@ use MCE::Step;
 
 use Carp;
 
-has start => (
+has param start => (
   required => 1,
-  is       => 'ro',
-  coerce   => sub ($val) {
+  is       => 'rw',
+  coerce   => sub  ($val) {
     return ref($val) eq 'URI' ? $val : URI->new($val);
   },
+  default => sub {
+    return URI->new('http://localhost:300');
+  }
 );
+
+sub base {
+    my $self = shift;
+    my $u  = $self->start->clone;
+    say "start is $u";
+    $u->fragment(undef);
+    $u->query(undef);
+    $u->path('/');
+    my $h = {
+      host => lc($u->host),
+      url  => $u,
+    };
+    return $h;
+  }
+
+
 
 has param workers => (
   is      => 'ro',
@@ -49,12 +69,16 @@ sub execute ($self) {
     thaw        => \&decode_sereal,
   );
 
-  $self->start(canon_uri($self->start));
   my $start_url_str = $self->start->as_string;
 
-  $self->logger->debug("base host is " . $self->base->{host});
+  unless(defined($self->start) && blessed($self->start)){
+    croak('start must be defined as a URI');
+    return;
+  }
+  $self->logger->notice(sprintf('starting url is "%s"', $self->start));
+
+  my @pending = ($self->start->as_string);
   my %seen;
-  my @pending = ($start->as_string);
   $seen{ $pending[0] } = 1;
 
   my @all_page_summaries;    # whatever Parser emits per page
@@ -99,30 +123,53 @@ sub execute ($self) {
     ));
   }
 
+  # set context for the duration of this mce_step call
+  my $page_index = MCE::Shared->hash();
+  for my $p (@all_page_summaries) {
+    my $url = $p->{url} // next;
+    $url = canon_url_string($url);
+    # Store what you need for validation
+    $page_index->set(
+      $url,
+      {
+        ok          => $p->{ok} ? 1 : 0,
+        http_status => 0+ ($p->{http_status} // 0),
+      }
+    );
+  }
+  my $known_pages = MCE::Shared->hash();
+  $known_pages->set($_, 1) for keys %seen;
+  local $LinkCheck::Role::Validator::CTX = {
+    known_pages => $known_pages,
+    page_index  => $page_index,
+    # anchors_by_page => $anchors_by_page,
+  };
+
   # Final validation pass (anchors, cross-page checks, etc.)
   my @validation_out = mce_step {
     task_name   => ['Validate'],
     max_workers => [$self->workers],
-    } \&LinkCheck::Role::Validator::validate_task,
+    }, \&LinkCheck::Role::Validator::validate_task,
     \@all_page_summaries;
 
   my @final = map { ref($_) eq 'ARRAY' ? @$_ : $_ } @validation_out;
 
 # Generate report from @final (or from master-owned state you updated during merges)
-  $self->_done_from_results(\@final);
+  $self->_done(\@final);
 
 }
 
-sub _done ($self) {
+sub _done ($self, $final_results) {
 
   # Print summary of broken links
   say "\n=== BROKEN LINKS SUMMARY ===\n";
 
   my $total_broken = 0;
-  my @all_keys     = sort $self->_internal_q->keys();
 
-  foreach my $url (@all_keys) {
-    my $entry = $self->_internal_q->{$url};
+  @{ $final_results } = sort { $a->{source_url} cmp $b->{source_url} } $final_results->@*;
+
+  foreach my $entry (@{ $final_results }) {
+    my $url = $entry->{source_url};
 
     my @broken_internal = @{ $entry->{broken_internal_links} // [] };
     my @broken_external = @{ $entry->{broken_external_links} // [] };

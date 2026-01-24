@@ -27,8 +27,7 @@ has field _logfile => (
   },
 );
 
-has field logger => (
-  reader  => 1,
+has logger => (
   is      => 'ro',
   default => sub {
     my $self = shift;

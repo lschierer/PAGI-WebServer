@@ -4,9 +4,8 @@ use utf8::all;
 
 use Mooish::Base -role;
 with 'LinkCheck::Role::Logger';
-with 'LinkCheck::Role::State';
 
-use LinkCheck::Util::URL qw(normalize_url_string);
+use LinkCheck::Util qw(normalize_url_string);
 
 use Mojo::DOM58;
 use URI;
@@ -24,7 +23,7 @@ sub parse_task ($mce, $chunk_ref, $chunk_id) {
     push @results, $worker_obj->parse_one($item);
   }
 
-  MCE->step(\@results, $chunk_id);
+  MCE->gather(\@results);
 }
 
 sub parse_one ($self, $item) {
@@ -62,6 +61,8 @@ sub parse_one ($self, $item) {
 
   my $page_uri  = URI->new($url);
   my $base_host = lc($page_uri->host // '');
+
+  $self->logger->debug(sprintf('parsing page "%s"', $page_uri));
 
   my (@internal, @external, @anchor_refs, @anchors);
 
@@ -172,7 +173,7 @@ sub _classify_and_record ($self, $page_url, $raw, $base_host, $internal_ref,
   my $frag = $abs->fragment;
   $abs->fragment(undef);
 
-  my $canon = normalize_url_string($self, $abs);
+  my $canon = normalize_url_string( $abs);
 
   my $host = lc($abs->host // '');
 

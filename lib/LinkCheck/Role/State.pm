@@ -1,8 +1,9 @@
 package LinkCheck::Role::State;
 use v5.42;
 use Mooish::Base -role;
-use Type::Utils     qw(declare);
-use Types::Standard qw(Enum);
+use Types::Standard ();
+require MCE::Shared;
+use Type::Utils     qw(declare as);
 
 use LinkCheck::Util qw(canon_uri);
 
@@ -12,7 +13,7 @@ our $STATES = [qw(
   completed
 )];
 
-declare 'LinkCheckState', as Enum [$STATES->@*];
+declare 'LinkCheckState', as Types::Standard::Enum [$STATES->@*];  ###<- line 15
 
 # Do not access directly, access via
 # $self->_new_item;
@@ -32,7 +33,7 @@ has field _item => (
 
 sub _new_item ($self, $provided) {
   $self->_stateCounts->incr('unchecked');
-  $u = $self->canon_uri($provided->{url});
+  my $u = $self->canon_uri($provided->{url});
   return { $self->_queue_item->%*, $provided->%*, base_url => $u, };
 }
 

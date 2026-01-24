@@ -11,16 +11,14 @@ use Net::Async::HTTP;
 use Scalar::Util qw(blessed);
 use URI;
 
-requires 'logger';
 
-has field _loop => (
-  is      => 'ro',
-  default => sub { state $loop; $loop //= IO::Async::Loop->new },
-);
+sub _loop  {
+  state $loop;
+  $loop //= IO::Async::Loop->new;
+  return $loop
+}
 
-has field _ua => (
-  is      => 'ro',
-  default => sub ($self) {
+sub _ua ($self) {
     state $ua;
     return $ua if $ua;
 
@@ -37,8 +35,7 @@ has field _ua => (
 
     $self->_loop->add($ua);
     return $ua;
-  },
-);
+  }
 
 sub fetch_task ($mce, $chunk_ref, $chunk_id) {
 
@@ -59,12 +56,12 @@ sub fetch_task ($mce, $chunk_ref, $chunk_id) {
     push @results, map { $_->get } @ready;
   }
 
-  MCE->step(\@results, $chunk_id);
+  MCE->gather(\@results);
 }
 
 sub fetch_one ($self, $url) {
   my $u = blessed($url) && $url->isa('URI') ? $url : URI->new($url);
-
+  $self->logger->debug(sprintf('fetch_one called for "%s", a %s', $u, blessed($u)));
   my $res = {
     url          => $u->as_string,
     ok           => 0,
@@ -90,7 +87,7 @@ sub fetch_one ($self, $url) {
   })->catch(sub ($err) {
     $res->{error} = "$err";
     return $res;
-  });
+  }); ###<-- line 90
 }
 
 1;
