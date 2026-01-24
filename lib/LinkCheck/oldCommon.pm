@@ -20,7 +20,7 @@ use Sereal::Encoder;
 use Time::HiRes  qw(time sleep);
 use Scalar::Util qw(blessed);
 use URI;
-use Type::Utils qw(declare);
+use Type::Utils     qw(declare);
 use Types::Standard qw(Enum);
 
 use Carp;
@@ -69,10 +69,7 @@ our $STATES = [qw(
   completed
 )];
 
-declare 'LinkCheckState',
-  as Enum[
-    $STATES->@*
-  ];
+declare 'LinkCheckState', as Enum [$LinkCheck::Common::STATES->@*];
 
 has start => (
   required => 1,
@@ -177,8 +174,8 @@ has _broken => (
 # Do not access directly, access via
 # $self->_new_queue_item;
 has field _queue_item => (
-  is          => 'ro',
-  default     => sub {
+  is      => 'ro',
+  default => sub {
     return {
       pending_internal_links     => [],
       pending_external_links     => [],
@@ -205,10 +202,11 @@ sub _new_queue_item ($self) {
 ### Stateful/Shared variables ###
 
 has field _stateCounts => (
-  is        => 'rw',
-  default   => sub ($self) {
-    new $sc = MCE::Shared->hash();
-    foreach my $state ($STATES->@*){
+  is      => 'rw',
+  default => sub ($self) {
+    state $sc;
+    $sc = MCE::Shared->hash();
+    foreach my $state ($self->_states->@*) {
       $sc->set($state, 0);
     }
     return $sc;
@@ -216,7 +214,7 @@ has field _stateCounts => (
 );
 
 has field _internal_q => (
-  is        => 'rw',
+  is      => 'rw',
   default => sub {
     my @data = ();
     return MCE::Shared->hash({ _DEEPLY_ => 1 });
@@ -224,7 +222,7 @@ has field _internal_q => (
 );
 
 has field _external_q => (
-  is        => 'rw',
+  is      => 'rw',
   default => sub {
     my @data = ();
     return MCE::Shared->hash({ _DEEPLY_ => 1 });
