@@ -119,6 +119,13 @@ sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
     %$extra_vars,    # Allow caller to override/extend
   };
 
+  if(exists $frontmatter->{autoindex} && !!$frontmatter->{autoindex}){
+    my $autoindex = $self->generate_directory_index($md_file);
+
+    push @{ $vars->{css_files} }, '/css/directory-list.css';
+    $vars->{entries} = $autoindex;
+  }
+
   my $tpl = $self->_build_template;
   my $rh = $tpl->process('markdown', $vars,);
   #$self->logger->debug('returnable html: ' . $rh);

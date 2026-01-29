@@ -88,10 +88,11 @@ sub build ($self) {
 
           push @entries,
             {
-            title => $title,
-            path  => $route,
-            type  => 'file',
-            order => $frontmatter->{sidebar}{order} // 999,
+            title     => $title,
+            path      => $route,
+            css_files => ['/css/gridIndex.css'],
+            type      => 'file',
+            order     => $frontmatter->{sidebar}{order} // 999,
             };
         }
         else {

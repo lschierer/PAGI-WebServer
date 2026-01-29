@@ -1,5 +1,10 @@
 [% WRAPPER layouts/default.tt %]
-<div class="markdown-content">
-    [% content %]
-</div>
+  <div class="markdown-content">
+      [% content %]
+  </div>
+  [% IF entries %]
+    <div class="directory-index">
+      [% INCLUDE partials/autoindex_list.tt entries=entries %]
+    </div>
+  [% END %]
 [% END %]

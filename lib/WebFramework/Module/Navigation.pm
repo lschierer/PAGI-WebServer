@@ -43,13 +43,36 @@ sub build ($self) {
 }
 
 # Register a route for navigation
+# When a route is registered multiple times, the entry with the lower order
+# value wins. This ensures that controllers with specific knowledge (e.g.,
+# Family controller registering "/Harrypedia/people/Potter" with order 20)
+# take precedence over generic auto-discovery (e.g., Root controller
+# registering the same path from a markdown file with order 50).
 sub _add_navigation_route ($self, $path, $title, $options = {}) {
-  $self->navigation_logger->debug("Adding navigation route: $path => $title");
+  my $new_order = $options->{order} // 999;
+
+  if (exists $self->navigation_routes->{$path}) {
+    my $existing_order = $self->navigation_routes->{$path}{order} // 999;
+    if ($existing_order <= $new_order) {
+      $self->navigation_logger->debug(
+        "Skipping navigation route: $path => $title (order $new_order) "
+        . "-- existing entry has order $existing_order"
+      );
+      return $self;
+    }
+    $self->navigation_logger->debug(
+      "Overriding navigation route: $path => $title (order $new_order "
+      . "beats existing order $existing_order)"
+    );
+  }
+  else {
+    $self->navigation_logger->debug("Adding navigation route: $path => $title");
+  }
 
   $self->navigation_routes->{$path} = {
     path  => $path,
     title => $title,
-    order => $options->{order} // 999,
+    order => $new_order,
     %$options,
   };
 
