@@ -314,7 +314,8 @@ sub _navigation_is_immediate_child ($self, $path1, $path2) {
 }
 
 sub _generate_sitemap ($self, $base_url = '') {
-  use Mojo::Util qw(xml_escape);
+  use URI::Escape qw(uri_escape uri_unescape);
+
 
   # Remove trailing slash from base_url
   $base_url =~ s|/$||;
@@ -341,7 +342,7 @@ sub _generate_sitemap ($self, $base_url = '') {
         my $full_url = $base_url . $current_path;
         push @urls,
           sprintf("  <url>\n    <loc>%s</loc>\n  </url>",
-          xml_escape($full_url));
+          uri_escape($full_url));
       }
 
       # Recurse into children

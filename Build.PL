@@ -47,6 +47,7 @@ my $builder = Module::Build->new(
     'Thunderhorse'        => '0.100',
     'Type::Tiny'          => '0',
     'URI'                 => '0',
+    'URI::Escape'         => '0',
     'XML::LibXML'         => '0',
     'YAML::XS'            => '0',
   },
