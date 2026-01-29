@@ -93,6 +93,8 @@ sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
   my ($frontmatter, $content_html) =
     $self->markdown->render_with_frontmatter($md_file->stringify);
 
+  $self->logger->debug(sprintf('content html is %s', $content_html));
+
   # Use title from frontmatter or generate from path
   my $title = $frontmatter->{title};
   if (!$title) {
@@ -118,7 +120,9 @@ sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
   };
 
   my $tpl = $self->_build_template;
-  return $tpl->process('page/markdown', $vars,);
+  my $rh = $tpl->process('markdown', $vars,);
+  #$self->logger->debug('returnable html: ' . $rh);
+  return $rh;
 }
 
 sub markdown_string_to_html ($self, $md_content) {

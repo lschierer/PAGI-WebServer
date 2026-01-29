@@ -1,0 +1,22 @@
+[% WRAPPER layouts/default.tt %]
+<div class="directory-index">
+  <h1>[% title %]</h1>
+  
+  [% IF entries.size > 0 %]
+    <ul class="spectrum-List spectrum-List--sizeM">
+      [% FOREACH entry IN entries %]
+        <li class="spectrum-List-item">
+          [% IF entry.type == 'directory' %]
+            <iconify-icon icon="spectrum:folder" class="spectrum-Icon spectrum-Icon--sizeS"></iconify-icon>
+          [% ELSE %]
+            <iconify-icon icon="spectrum:document" class="spectrum-Icon spectrum-Icon--sizeS"></iconify-icon>
+          [% END %]
+          <a href="[% entry.path %]" class="spectrum-Link">[% entry.title %]</a>
+        </li>
+      [% END %]
+    </ul>
+  [% ELSE %]
+    <p class="spectrum-Body spectrum-Body--sizeM">This directory is empty.</p>
+  [% END %]
+</div>
+[% END %]
