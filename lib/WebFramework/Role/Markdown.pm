@@ -12,6 +12,7 @@ use Carp;
 require WebFramework::Service::Markdown;
 
 has markdown => (
+  hidden  => 1,
   is      => 'ro',
   default => sub {
     my $self = shift;
@@ -67,6 +68,17 @@ sub _build_template ($self) {
   return Gears::Template::TT->new($config->%*);
 }
 
+sub parse_frontmatter_from_string ($self, $string){
+my ($yaml_text) = $string =~ /^---\s*\n(.*?)\n---/s;
+
+  return {} unless $yaml_text;
+
+  # Parse just the YAML frontmatter
+  # YAML::XS expects UTF-8 byte strings and will decode them internally
+  my $frontmatter = eval { YAML::XS::Load($yaml_text) };
+  return $frontmatter || {};
+}
+
 sub parse_markdown_frontmatter ($self, $md_file_path) {
   my $md_file = Path::Tiny::path($md_file_path);
 
@@ -75,14 +87,7 @@ sub parse_markdown_frontmatter ($self, $md_file_path) {
   # Fast frontmatter extraction - only read the YAML header
   # Use slurp_raw since YAML::XS expects byte strings
   my $content = $md_file->slurp_raw;
-  my ($yaml_text) = $content =~ /^---\s*\n(.*?)\n---/s;
-
-  return {} unless $yaml_text;
-
-  # Parse just the YAML frontmatter
-  # YAML::XS expects UTF-8 byte strings and will decode them internally
-  my $frontmatter = eval { YAML::XS::Load($yaml_text) };
-  return $frontmatter || {};
+  return $self->parse_frontmatter_from_string($content);
 }
 
 sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
