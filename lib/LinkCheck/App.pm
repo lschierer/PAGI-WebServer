@@ -87,7 +87,9 @@ sub execute ($self) {
   $fetch_workers = 1 if $fetch_workers < 1;
   my $parse_workers = 1;
 
+  my $wave_num = 0;
   while (@pending) {
+    $wave_num++;
     my @wave = @pending;
     @pending = ();
 
@@ -117,8 +119,8 @@ sub execute ($self) {
       # stash external for later
     }
     $self->logger->info(sprintf(
-      "wave done: in=%d fetched=%d parsed=%d next=%d total_seen=%d",
-      scalar(@wave),    scalar(@phase1), scalar(@phase2),
+      "wave %d done: in=%d fetched=%d parsed=%d next=%d total_seen=%d",
+      $wave_num,        scalar(@wave),    scalar(@phase1), scalar(@phase2),
       scalar(@pending), scalar(keys %seen),
     ));
   }
