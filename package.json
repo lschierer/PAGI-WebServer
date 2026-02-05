@@ -1,5 +1,6 @@
 {
   "name": "pagi-webserver",
+  "type": "module",
   "version": "1.0.0",
   "scripts": {
     "build": "tsc",
@@ -7,9 +8,12 @@
     "test": "echo 'No tests yet'"
   },
   "devDependencies": {
-    "typescript": "^5.7.2",
     "@types/node": "^22.10.2",
+    "aws-cdk-lib": "^2.237.1",
+    "cdk": "^2.1104.0",
+    "constructs": "^10.4.5",
     "postcss": "^8.5.0",
-    "postcss-cli": "^11.0.0"
+    "postcss-cli": "^11.0.0",
+    "typescript": "^5.7.2"
   }
 }

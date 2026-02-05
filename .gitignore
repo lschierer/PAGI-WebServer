@@ -8,3 +8,8 @@ PAGI-WebServer-*
 MYMETA.json
 MYMETA.yml
 Build
+
+# CDK
+cdk.out/
+cdk.context.json
+.cdk.staging/

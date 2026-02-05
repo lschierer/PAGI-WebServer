@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+eval "$(/opt/prefix/.local/bin/mise activate bash)"
+export PATH="/opt/prefix/.local/bin/:$HOME/bin:$PATH"
+
+cd /opt/prefix/app || exit 2
+
+perl "$@"

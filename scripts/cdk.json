@@ -1,0 +1,7 @@
+{
+  "app": "npx tsx scripts/shared-vpc.ts",
+  "requireApproval": "never",
+  "context": {
+    "@aws-cdk/core:newStyleStackSynthesis": true
+  }
+}
