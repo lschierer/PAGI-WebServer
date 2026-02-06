@@ -113,14 +113,14 @@ ATTEMPT=1
 while [ $ATTEMPT -le 5 ]; do
   echo "Attempt $ATTEMPT/5: Running certbot"
   
-  CERTBOTRESULT
-  if [ ${MODE_VALUE} -ne 'prod' ]; then
+  CERTBOTRESULT=
+  if [ ${MODE_VALUE} == 'prod' ]; then
     certbot certonly --nginx -m 'staff@schierer.org' --agree-tos -d "${H}.${DOMAIN1}" -d "www.${DOMAIN1}" --non-interactive;
-    CERTBOTRESULT = $?;
+    CERTBOTRESULT=$?;
   else
     DOMAIN2="${MODE_VALUE}.${DOMAIN1}"
     certbot certonly --nginx -m 'staff@schierer.org' --agree-tos -d "${H}.${DOMAIN1}" -d "${DOMAIN2}" -d "www.${DOMAIN2}" --non-interactive;
-    CERTBOTRESULT = $?;
+    CERTBOTRESULT=$?;
   
   fi
 

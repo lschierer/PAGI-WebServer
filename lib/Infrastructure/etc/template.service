@@ -9,7 +9,7 @@ Group=www-data
 WorkingDirectory=/opt/prefix/app
 Environment="PATH=/opt/prefix/.local/bin:/opt/prefix/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin"
 PIDFile=/opt/prefix/var/run/Lukes-Ebooks.pid
-ExecStart=/opt/prefix/bin/appperl bin/server2.pl --mode test
+ExecStart=/opt/prefix/bin/appperl bin/server.pl --mode REPLACEMODE
 ExecReload=/bin/kill -HUP $MAINPID
 TimeoutStartSec=900
 KillMode=mixed

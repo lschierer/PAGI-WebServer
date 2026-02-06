@@ -148,13 +148,18 @@ export class CustomUbuntuUserData {
           ),
           ec2.InitFile.fromString(
             `/etc/sudoers.d/91-appuser-${props.prefix}`,
-            `appuser ALL=(ALL) NOPASSWD:/usr/bin/systemctl start ${props.prefix}, NOPASSWD:/usr/bin/systemctl stop ${props.prefix}, NOPASSWD:/usr/bin/systemctl restart ${props.prefix}`,
+            [`appuser ALL=(ALL) NOPASSWD:/usr/bin/systemctl start ${props.prefix}`,
+              `NOPASSWD:/usr/bin/systemctl stop ${props.prefix}`,
+              `NOPASSWD:/usr/bin/systemctl restart ${props.prefix}`,
+              `NOPASSWD:/opt/prefix/bin/setup-nginx.sh`,
+              `NOPASSWD:/usr/bin/systemctl reload nginx`
+            ].join(', '),  
             {
               mode: '000440',
               owner: 'root',
               group: 'root',
             },
-          ),
+         ),
           ec2.InitUser.fromName('appuser', {
             homeDir: '/opt/prefix',
             groups: ['www-data'],
@@ -278,7 +283,7 @@ export class CustomUbuntuUserData {
             `sed -i -E 's|REPLACE_KEY|${props.appCodeAsset.s3ObjectKey}|;'  /opt/prefix/bin/bootstrap.sh`,
           ),
           ec2.InitCommand.shellCommand(
-            `sed -i -E 's|PREFIXREPLACE|${props.prefix}|' /opt/prefix/bin/bootstrap.sh`,
+            `sed -i -E 's|PREFIXREPLACE|${props.prefix === 'prod' ? 'www' : props.prefix}|' /opt/prefix/bin/bootstrap.sh`,
           ),
           ec2.InitCommand.shellCommand(
             'cp /opt/prefix/bin/setup-cert.sh /usr/local/bin',
@@ -309,7 +314,9 @@ export class CustomUbuntuUserData {
           ec2.InitCommand.shellCommand(
             `sudo cp /tmp/prefix_etc/template.service /etc/systemd/system/${props.prefix}.service`,
           ),
-
+          ec2.InitCommand.shellCommand(
+            `sudo sed -i -E 's|REPLACEMODE|${props.mode}|' /etc/systemd/system/${props.prefix}.service`
+          ),
           ec2.InitCommand.shellCommand(
             `cp /tmp/prefix_etc/logrotate-template.conf /etc/logrotate.d/${props.prefix}`,
           ),

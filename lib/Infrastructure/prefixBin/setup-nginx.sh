@@ -2,6 +2,28 @@
 
 set -e
 
+# Check if app provides its own nginx config
+if [ -f /opt/prefix/app/deploy/nginx-site.conf ]; then
+  # Use app-provided config
+  export H=$( grep 127.0.1.1 /etc/hosts | cut -d ' ' -f 3 | cut -d '.' -f 1);
+  
+  # Copy and process template
+  sudo cp /opt/prefix/app/deploy/nginx-site.conf /etc/nginx/sites-available/app
+  
+  # Replace placeholders (apps can use these variables)
+  sudo sed -i "s/REPLACE_HOSTNAME/${H}/g" /etc/nginx/sites-available/app
+  
+  # Enable site
+  sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
+  
+  # Remove default site
+  sudo rm -f /etc/nginx/sites-enabled/default
+  
+  echo "Installed app-provided nginx config"
+  exit 0
+fi
+
+# Fallback: generic config (for backward compatibility)
 export H=$( grep 127.0.1.1 /etc/hosts | cut -d ' ' -f 3 | cut -d '.' -f 1);
 export APPROXY=$( mktemp );
 cat > ${APPROXY} << EOF

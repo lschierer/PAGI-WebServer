@@ -4,6 +4,7 @@ set -e
 APP_HOME="/opt/prefix"
 APP_PATH="${APP_HOME}/app"
 PAGI_PATH="${APP_HOME}/PAGI-WebServer"
+DOMAIN='books.schierer.org'
 export PATH="/opt/prefix/.local/bin/:$HOME/bin:$PATH"
 
 
@@ -104,6 +105,19 @@ else
   ./Build
 fi
 
+H=$(hostname -s); 
+
+sed -i -E "s/REPLACE_HOSTNAME/${H}/g" /opt/prefix/app/deploy/nginx-site.conf
+sed -i -E "s/REPLACE_DOMAIN/${DOMAIN}/g" /opt/prefix/app/deploy/nginx-site.conf
+sed -i -E "s/REPLACE2/PREFIXREPLACE/g" /opt/prefix/app/deploy/nginx-site.conf
+# Setup nginx with app-specific config
+sudo /opt/prefix/bin/setup-nginx.sh
+
+# wait for cert
+sleep 120
+
+# Reload nginx with real certificate
+sudo systemctl reload nginx
 
 # Start the application service now that build is complete
 sudo systemctl start PREFIXREPLACE
