@@ -18,7 +18,6 @@ import { type ApplicationStackProps } from './ApplicationStackProps.ts';
 export class ApplicationStack extends Stack {
   readonly applicationURL;
   readonly appPrefix;
-
   constructor(scope: Construct, id: string, props: ApplicationStackProps) {
     super(scope, id, props);
 

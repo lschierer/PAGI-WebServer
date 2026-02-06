@@ -65,12 +65,12 @@ export class UbuntuInstance extends ec2.Instance {
     // slightly randomize the hostname so that if I need to iterate
     // on the way the ec2 instance is built, letsencrypt sees different account names
     // temporarily store this in ${h} and assign to this.hostname after super() is called.
-    const h =
+    const hn =
     props.mode === 'prod'
     ? `www${getRandomInteger(10, 99)}`
     : `${props.appSubdomain}${getRandomInteger(10, 99)}`;
 
-    const custominit = new CustomUbuntuUserData(scope, props, h);
+    const custominit = new CustomUbuntuUserData(scope, props, hn);
 
     // Create custom user data that installs cfn-bootstrap FIRST
 
@@ -134,7 +134,7 @@ export class UbuntuInstance extends ec2.Instance {
       ],
     });
 
-    this.hostname = h;
+    this.hostname = hn;
 
     console.log(`instance is at ${this.instancePublicDnsName}`);
 
