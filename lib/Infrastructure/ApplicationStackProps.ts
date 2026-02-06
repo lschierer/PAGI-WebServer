@@ -3,7 +3,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3assets from 'aws-cdk-lib/aws-s3-assets';
 
 export interface ApplicationStackProps extends StackProps {
-  mode: 'dev' | 'testing' | 'staging' | 'prod';
+  mode: 'dev' | 'testing' | 'test' | 'staging' | 'prod';
   CidrRange?: string; // Optional if vpc is provided
   prefix: string;
   domainName: string;

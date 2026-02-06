@@ -2,6 +2,12 @@
 
 set -e
 
+if [ -f /opt/prefix/app/deploy/.htpasswd ]; then 
+    mv /opt/prefix/app/deploy/.htpasswd /opt/prefix/etc/
+    chgrp www-data /opt/prefix/etc/.htpasswd
+    chmod 640 /opt/prefix/etc/.htpasswd
+fi
+
 # Check if app provides its own nginx config
 if [ -f /opt/prefix/app/deploy/nginx-site.conf ]; then
   # Use app-provided config

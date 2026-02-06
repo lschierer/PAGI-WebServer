@@ -109,7 +109,7 @@ H=$(hostname -s);
 
 sed -i -E "s/REPLACE_HOSTNAME/${H}/g" /opt/prefix/app/deploy/nginx-site.conf
 sed -i -E "s/REPLACE_DOMAIN/${DOMAIN}/g" /opt/prefix/app/deploy/nginx-site.conf
-sed -i -E "s/REPLACE2/PREFIXREPLACE/g" /opt/prefix/app/deploy/nginx-site.conf
+sed -i -E "s/REPLACE2/MODEREPLACE/g" /opt/prefix/app/deploy/nginx-site.conf
 # Setup nginx with app-specific config
 sudo /opt/prefix/bin/setup-nginx.sh
 

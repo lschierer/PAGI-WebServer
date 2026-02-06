@@ -30,6 +30,9 @@ export class CustomUbuntuUserData {
     props: UbuntuInstanceProps,
     hostname: string,
   ) {
+    // Add timestamp to force asset rebuild on every deploy
+    const deployTimestamp = Date.now().toString();
+    
     this.prefix_bin_asset = new s3Assets.Asset(stack, 'prefixBinAsset', {
       path: path.join(__dirname, './prefixBin'),
     });
@@ -137,6 +140,15 @@ export class CustomUbuntuUserData {
           ec2.InitCommand.shellCommand('systemctl enable unattended-upgrades'),
         ]),
         createUsers: new ec2.InitConfig([
+          ec2.InitFile.fromString(
+            '/tmp/hostnamedata',
+            `hostname: ${hostname}\ndomainName: ${props.domainName}`,
+            {
+              mode: '000444',
+              owner: 'root',
+              group: 'root'
+            }
+          ),
           ec2.InitFile.fromString(
             `/etc/sudoers.d/90-nopasswd-adm`,
             `%adm ALL=(ALL) NOPASSWD:ALL`,
@@ -283,7 +295,10 @@ export class CustomUbuntuUserData {
             `sed -i -E 's|REPLACE_KEY|${props.appCodeAsset.s3ObjectKey}|;'  /opt/prefix/bin/bootstrap.sh`,
           ),
           ec2.InitCommand.shellCommand(
-            `sed -i -E 's|PREFIXREPLACE|${props.prefix === 'prod' ? 'www' : props.prefix}|' /opt/prefix/bin/bootstrap.sh`,
+            `sed -i -E 's|MODEREPLACE|${props.mode === 'prod' ? 'www' : props.mode}|' /opt/prefix/bin/bootstrap.sh`,
+          ),
+          ec2.InitCommand.shellCommand(
+            `sed -i -E 's|PREFIXREPLACE|${props.prefix}|g' /opt/prefix/bin/bootstrap.sh`
           ),
           ec2.InitCommand.shellCommand(
             'cp /opt/prefix/bin/setup-cert.sh /usr/local/bin',
