@@ -280,7 +280,9 @@ export class CustomUbuntuUserData {
           ec2.InitCommand.shellCommand(
             'mv /opt/prefix/bin/.bash* /opt/prefix/',
           ),
-
+          ec2.InitCommand.shellCommand(
+            `sed -i -E 's/PREFIXREPLACE/${prefix.prefix}/g' /opt/prefix/bin/deploy-prefix.sh`
+          ),
           ec2.InitCommand.shellCommand(
             'cp /opt/prefix/bin/deploy-prefix.sh /usr/local/bin',
           ),
@@ -299,6 +301,9 @@ export class CustomUbuntuUserData {
           ),
           ec2.InitCommand.shellCommand(
             `sed -i -E 's|PREFIXREPLACE|${props.prefix}|g' /opt/prefix/bin/bootstrap.sh`
+          ),
+          ec2.InitCommand.shellCommand(
+            `sed -i -E 's|PREFIXDOMAIN|${props.prefix}|g' /opt/prefix/bin/bootstrap.sh`
           ),
           ec2.InitCommand.shellCommand(
             'cp /opt/prefix/bin/setup-cert.sh /usr/local/bin',
@@ -326,6 +331,9 @@ export class CustomUbuntuUserData {
           ),
           ec2.InitCommand.shellCommand('sudo service procps force-reload'),
 
+          ec2.InitCommand.shellCommand(
+            `sed -i -E 's/PREFIXREPLACE/${props.prefix}/g' /tmp/prefix_etc/template.service`
+          ),
           ec2.InitCommand.shellCommand(
             `sudo cp /tmp/prefix_etc/template.service /etc/systemd/system/${props.prefix}.service`,
           ),

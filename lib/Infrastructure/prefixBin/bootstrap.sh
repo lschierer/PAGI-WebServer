@@ -4,7 +4,7 @@ set -e
 APP_HOME="/opt/prefix"
 APP_PATH="${APP_HOME}/app"
 PAGI_PATH="${APP_HOME}/PAGI-WebServer"
-DOMAIN='books.schierer.org'
+DOMAIN='PREFIXDOMAIN'
 export PATH="/opt/prefix/.local/bin/:$HOME/bin:$PATH"
 
 

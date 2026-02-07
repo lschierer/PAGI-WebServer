@@ -2,7 +2,7 @@
 set -e
 
 # Define variables for service and app paths for clarity
-SERVICE_NAME="lukesebooks"
+SERVICE_NAME="PREFIXREPLACE"
 APP_HOME="/opt/prefix"
 APP_PATH="${APP_HOME}/app"
 PAGI_PATH="${APP_HOME}/PAGI-WebServer"

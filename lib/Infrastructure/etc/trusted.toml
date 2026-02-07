@@ -1,8 +1,5 @@
 ["/opt/prefix/app"]
 trusted = true
 
-["/opt/prefix/Lukes-Ebooks"]
-trusted = true
-
 ["/opt/prefix/PAGI-WebServer"]
 trusted = true

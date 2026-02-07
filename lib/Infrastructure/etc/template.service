@@ -1,5 +1,5 @@
 [Unit]
-Description=Luke's Ebooks Website
+Description=FIX THIS DESCRIPTION
 After=network.target
 
 [Service]
@@ -8,7 +8,7 @@ User=appuser
 Group=www-data
 WorkingDirectory=/opt/prefix/app
 Environment="PATH=/opt/prefix/.local/bin:/opt/prefix/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin"
-PIDFile=/opt/prefix/var/run/Lukes-Ebooks.pid
+PIDFile=/opt/prefix/var/run/PREFIXREPLACE.pid
 ExecStart=/opt/prefix/bin/appperl bin/server.pl --mode REPLACEMODE
 ExecReload=/bin/kill -HUP $MAINPID
 TimeoutStartSec=900
