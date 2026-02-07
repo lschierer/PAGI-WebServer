@@ -2,149 +2,129 @@
 
 set -e
 
-if [ -f /opt/prefix/app/deploy/.htpasswd ]; then 
-    mv /opt/prefix/app/deploy/.htpasswd /opt/prefix/etc/
-    chgrp www-data /opt/prefix/etc/.htpasswd
-    chmod 640 /opt/prefix/etc/.htpasswd
-fi
+LONG_OPTS=mode:,domain1:,help
+# Define short options string. A colon (:) after an option means it requires an argument.
+SHORT_OPTS=m:d:h
 
-# Check if app provides its own nginx config
-if [ -f /opt/prefix/app/deploy/nginx-site.conf ]; then
-  # Use app-provided config
-  export H=$( grep 127.0.1.1 /etc/hosts | cut -d ' ' -f 3 | cut -d '.' -f 1);
-  
-  # Copy and process template
-  sudo cp /opt/prefix/app/deploy/nginx-site.conf /etc/nginx/sites-available/app
-  
-  # Replace placeholders (apps can use these variables)
-  sudo sed -i "s/REPLACE_HOSTNAME/${H}/g" /etc/nginx/sites-available/app
-  
-  # Enable site
-  sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
-  
-  # Remove default site
-  sudo rm -f /etc/nginx/sites-enabled/default
-  
-  echo "Installed app-provided nginx config"
+PARSED_OPTIONS=$(getopt -o $SHORT_OPTS -l $LONG_OPTS -n "$0" -- "$@")
+
+# Check if getopt encountered an error
+if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+
+# Use eval to properly parse the output of getopt into positional parameters
+eval set -- "$PARSED_OPTIONS"
+
+MODE_VALUE=
+DOMAIN1=
+HELP_FLAG=0
+
+# Loop through the arguments
+while true; do
+  case "$1" in
+  -m | --mode)
+    MODE_VALUE="$2"
+    shift 2 # Shift past the option and the argument
+    ;;
+  -d | --domain1)
+    DOMAIN1="$2"
+    shift 2
+    ;;
+  -h | --help)
+    HELP_FLAG=1
+    shift # Shift past the option
+    ;;
+  --) # End of options marker
+    shift
+    break
+    ;;
+  *)
+    echo "Internal error: unrecognized option $1" >&2
+    exit 1
+    ;;
+  esac
+done
+
+# Function to display help information
+display_help() {
+  echo "Usage: $0 [-m <mode> | --mode=<mode>]"
+  echo "Options:"
+  echo "  -m, --mode  Specify the operation mode (e.g., 'read', 'write')"
+  echo "  -d, --domain1 Specify the domain name for the primary domain"
+  echo "  -h, --help  Display this help message"
+}
+
+# Post-processing to ensure the 'mode' parameter was provided
+if [ $HELP_FLAG -eq 1 ]; then
+  display_help
   exit 0
 fi
 
-# Fallback: generic config (for backward compatibility)
+if [ -z "$MODE_VALUE" ]; then
+  echo "Error: The 'mode' parameter is required." >&2
+  display_help >&2
+  exit 1
+fi
+
+if [ -z "$DOMAIN1" ]; then
+  echo "Error: The 'domain1 parameter is required." >&2
+  display_help >&2
+  exit 1
+fi
+
+
+export SITECONFIG='/opt/prefix/app/deploy/nginx-site.conf'
+
+MAX_ATTEMPTS=20
+ATTEMPT=1
+
+while [ $ATTEMPT -le $MAX_ATTEMPTS  ]; do
+
+  if [ -f ${SITECONFIG} ]; then
+    echo "Site Config is Available"
+    break;
+  fi
+
+  SLEEP_TIME=$((5 + ATTEMPT * 10))
+  echo "SITECONFIG not ready yet, sleeping ${SLEEP_TIME}s..."
+  sleep $SLEEP_TIME
+  ATTEMPT=$((ATTEMPT + 1))
+  
+done
+
+if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+  echo "application specific nginx site configuration is required!"
+  exit 1
+fi
+
+if [ -f /opt/prefix/app/deploy/.htpasswd ]; then 
+  mv /opt/prefix/app/deploy/.htpasswd /opt/prefix/etc/
+  chgrp www-data /opt/prefix/etc/.htpasswd
+  chmod 640 /opt/prefix/etc/.htpasswd
+fi
+
+# Remove default site
+rm -f /etc/nginx/sites-enabled/default
+
+
 export H=$( grep 127.0.1.1 /etc/hosts | cut -d ' ' -f 3 | cut -d '.' -f 1);
-export APPROXY=$( mktemp );
-cat > ${APPROXY} << EOF
-upstream application {
-  server 127.0.1.1:REPLACE_PORT  ;
-  # Maintain pool of idle keepalive connections to reduce connection overhead
-  keepalive 32;
-  keepalive_requests 10000;
-  keepalive_timeout 1h;
-}
-server {
-  listen                80;
-  server_name           ${H}.REPLACE_DOMAIN REPLACE2.REPLACE_DOMAIN www.REPLACE2.REPLACE_DOMAIN;
-  return                301 https://$host$request_uri;
-}
-# Rate limit zones - apply based on whether request is from trusted source
-map \$http_user_agent \$limit_key {
-  default                           \$binary_remote_addr;
-  ~*LinkChecker                     "";                      # Your link checker bypasses limits
-  ~*Googlebot                       "";                      # Google gets a pass
-  ~*bingbot                         "";                      # Bing gets a pass
-}
 
-limit_req_zone \$limit_key zone=anti_hammer:10m rate=100r/s;        # Increased for link checker
-limit_req_zone \$limit_key zone=generals_heavy:10m rate=50r/s;      # Increased for link checker
-limit_req_zone \$binary_remote_addr zone=security_scan:10m rate=1r/m;  # New: block scanners
+sed -i -E "s/REPLACE_HOSTNAME/${H}/g" ${SITECONFIG}
+sed -i -E "s/REPLACE_DOMAIN/${DOMAIN1}/g" ${SITECONFIG}
 
-# Bypass rate limits for trusted bots
-geo \$bypass_rate_limit {
-  default 0;
-}
-map \$http_user_agent \$bypass_rate_limit {
-  default 0;
-  ~*LinkChecker 1;
-  ~*Googlebot 1;
-  ~*bingbot 1;
-}
+SERVER_NAMES=''
+if [[ "$MODE_VALUE" == "prod" ]]; then
+  SERVER_NAMES="${HOSTNAME}.${DOMAIN1} ${DOMAIN1} www.${DOMAIN1}"
+else
+  SERVER_NAMES="${HOSTNAME}.${DOMAIN1} ${MODE_VALUE}.${DOMAIN1} www.${MODE_VALUE}.${DOMAIN1}"
+fi
+sed -i -E "s/REPLACE_SERVER_NAMES/${SERVER_NAMES}/" ${SITECONFIG}
 
-server {
-  listen 443 ssl;
-  server_name           ${H}.REPLACE_DOMAIN REPLACE2.REPLACE_DOMAIN www.REPLACE2.REPLACE_DOMAIN;
-  ssl_certificate       /etc/nginx/ssl/REPLACE_DOMAIN.crt;
-  ssl_certificate_key   /etc/nginx/ssl/REPLACE_DOMAIN.key;
-  ssl_protocols         TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
-  ssl_ciphers           HIGH:!aNULL:!MD5;
-  ssl_session_timeout   15m;
-  # Block OpenAI crawlers
-  if (\$http_referer ~* (openai\.com)) {
-    return 444;
-  }
+cp ${SITECONFIG} /etc/nginx/sites-available/appproxy
 
-  # Block common security scanning patterns
-  location ~* /(\.env|\.git|wp-admin|phpMyAdmin|admin|\.php\$|\.asp\$) {
-    limit_req zone=security_scan burst=1 nodelay;
-    limit_req_status 444;  # Close connection without response
-    return 404;
-  }
+ln -s /etc/nginx/sites-available/appproxy /etc/nginx/sites-enabled/
 
-  # Block requests with suspicious query strings (SQL injection, XSS attempts)
-  if (\$args ~* (union.*select|concat.*\(|base64_|javascript:|<script)) {
-    return 444;
-  }
+echo "Installed app-provided nginx config"
 
-  # Serve static files directly from nginx (much faster than proxying to Mojolicious)
-  # These are compiled assets in the shared data directory
-  location ~* ^/(css|js|images|assets|types)/ {
-    root /opt/prefix/app/share/public;
-    expires 1y;
-    add_header Cache-Control "public, immutable";
-
-    # Enable gzip compression for text-based files
-    gzip on;
-    gzip_types text/css application/javascript application/json image/svg+xml;
-    gzip_vary on;
-  }
-
-  # Serve ads.txt directly
-  location = /ads.txt {
-    root /opt/prefix/app/share/public;
-    expires 1d;
-  }
-
-  location /Generals {
-    limit_req zone=generals_heavy burst=5 nodelay;  # Raised from 2
-    limit_req_status 429;
-    proxy_pass http://application;
-    proxy_http_version 1.1;
-    proxy_read_timeout 3600;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host \$host;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_connect_timeout 300s;
-    proxy_send_timeout 300s;
-  }
-
-  location / {
-    limit_req zone=anti_hammer burst=10 nodelay;  # Raised from 5
-    limit_req_status 429;
-    proxy_pass http://application;
-    proxy_http_version 1.1;
-    proxy_read_timeout 3600;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host \$host;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_connect_timeout 300s;
-    proxy_send_timeout 300s;
-  }
-}
-EOF
-
-sudo cp ${APPROXY} /etc/nginx/sites-available/appproxy
-sudo ln -s /etc/nginx/sites-available/appproxy /etc/nginx/sites-enabled/
+/usr/bin/systemctl reload nginx || /usr/sbin/nginx -T 
 
 exit 0

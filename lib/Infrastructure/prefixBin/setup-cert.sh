@@ -129,6 +129,9 @@ while [ $ATTEMPT -le 5 ]; do
     rm -f /etc/nginx/ssl/${DOMAIN1}.key /etc/nginx/ssl/${DOMAIN1}.crt
     ln -s /etc/letsencrypt/live/${H}.${DOMAIN1}/privkey.pem /etc/nginx/ssl/${DOMAIN1}.key
     ln -s /etc/letsencrypt/live/${H}.${DOMAIN1}/fullchain.pem /etc/nginx/ssl/${DOMAIN1}.crt
+    chmod a+x /etc/letsencrypt/archive/ 
+    chgrp -R www-data /etc/letsencrypt/archive/${H}.${DOMAIN1} 
+    chmod -R g+r /etc/letsencrypt/archive/${H}.${DOMAIN1}
     systemctl reload nginx
     echo "Certificate installed successfully"
     exit 0

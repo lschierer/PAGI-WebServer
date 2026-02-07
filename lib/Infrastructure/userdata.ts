@@ -25,6 +25,16 @@ export class CustomUbuntuUserData {
 
   public shellCommands: ec2.UserData;
 
+  private mode_to_stage = (mode: string) => {
+    if(!mode.localeCompare('dev')){
+      return 'development';
+    }
+    if(!mode.localeCompare('prod')){
+      return 'production';
+    }
+    return 'test';
+  };
+
   public constructor(
     stack: Stack,
     props: UbuntuInstanceProps,
@@ -160,11 +170,13 @@ export class CustomUbuntuUserData {
           ),
           ec2.InitFile.fromString(
             `/etc/sudoers.d/91-appuser-${props.prefix}`,
-            [`appuser ALL=(ALL) NOPASSWD:/usr/bin/systemctl start ${props.prefix}`,
+            'appuser ALL=' + [
+              `NOPASSWD:/usr/bin/systemctl start ${props.prefix}`,
               `NOPASSWD:/usr/bin/systemctl stop ${props.prefix}`,
               `NOPASSWD:/usr/bin/systemctl restart ${props.prefix}`,
-              `NOPASSWD:/opt/prefix/bin/setup-nginx.sh`,
-              `NOPASSWD:/usr/bin/systemctl reload nginx`
+              'NOPASSWD:/usr/bin/systemctl reload nginx',
+              'NOPASSWD:/usr/bin/systemctl restart nginx',
+              'NOPASSWD:/opt/prefix/bin/setup-nginx.sh'
             ].join(', '),  
             {
               mode: '000440',
@@ -281,7 +293,7 @@ export class CustomUbuntuUserData {
             'mv /opt/prefix/bin/.bash* /opt/prefix/',
           ),
           ec2.InitCommand.shellCommand(
-            `sed -i -E 's/PREFIXREPLACE/${prefix.prefix}/g' /opt/prefix/bin/deploy-prefix.sh`
+            `sed -i -E 's/PREFIXREPLACE/${props.prefix}/g' /opt/prefix/bin/deploy-prefix.sh`
           ),
           ec2.InitCommand.shellCommand(
             'cp /opt/prefix/bin/deploy-prefix.sh /usr/local/bin',
@@ -303,13 +315,10 @@ export class CustomUbuntuUserData {
             `sed -i -E 's|PREFIXREPLACE|${props.prefix}|g' /opt/prefix/bin/bootstrap.sh`
           ),
           ec2.InitCommand.shellCommand(
-            `sed -i -E 's|PREFIXDOMAIN|${props.prefix}|g' /opt/prefix/bin/bootstrap.sh`
+            `sed -i -E 's|PROPSDOMAIN|${props.domainName}|g' /opt/prefix/bin/bootstrap.sh`
           ),
           ec2.InitCommand.shellCommand(
-            'cp /opt/prefix/bin/setup-cert.sh /usr/local/bin',
-          ),
-          ec2.InitCommand.shellCommand(
-            'chmod 0755 /usr/local/bin/setup-cert.sh',
+            'chmod 0755 /usr/local/bin/*.sh',
           ),
           ec2.InitCommand.shellCommand('mkdir -p /tmp/prefix_etc'),
           ec2.InitCommand.shellCommand(
@@ -338,7 +347,7 @@ export class CustomUbuntuUserData {
             `sudo cp /tmp/prefix_etc/template.service /etc/systemd/system/${props.prefix}.service`,
           ),
           ec2.InitCommand.shellCommand(
-            `sudo sed -i -E 's|REPLACEMODE|${props.mode}|' /etc/systemd/system/${props.prefix}.service`
+            `sudo sed -i -E 's|REPLACEMODE|${this.mode_to_stage(props.mode)}|' /etc/systemd/system/${props.prefix}.service`
           ),
           ec2.InitCommand.shellCommand(
             `cp /tmp/prefix_etc/logrotate-template.conf /etc/logrotate.d/${props.prefix}`,
@@ -351,7 +360,7 @@ export class CustomUbuntuUserData {
           // Script has its own retry logic, no systemd service needed
 
           ec2.InitCommand.shellCommand(
-            `echo "/usr/local/bin/setup-cert.sh --mode ${props.mode} --domain1 ${props.domainName} >> /var/log/setup-cert.log 2>&1" | at now + 2 minutes`,
+            `echo "/opt/prefix/bin/rootBootstrap.sh --mode ${props.mode} --domain1 ${props.domainName}; >> /var/log/bootstrap.log" | at now + 2 minutes`,
           ),
           // The PDL perl package compile takes *forever*, so give this a generous amount of time.
           ec2.InitCommand.shellCommand(

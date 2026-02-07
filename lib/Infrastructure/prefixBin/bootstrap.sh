@@ -4,7 +4,7 @@ set -e
 APP_HOME="/opt/prefix"
 APP_PATH="${APP_HOME}/app"
 PAGI_PATH="${APP_HOME}/PAGI-WebServer"
-DOMAIN='PREFIXDOMAIN'
+PREFIX='PREFIXREPLACE'
 export PATH="/opt/prefix/.local/bin/:$HOME/bin:$PATH"
 
 
@@ -82,7 +82,7 @@ cpanm --self-upgrade -q
 # Pre-install HTML::Tree family to avoid circular dependency issues
 cpanm -nq HTML::Tagset HTML::Parser HTML::Tree
 
-cpanm Module::Build utf8::all
+cpanm Module::Build utf8::all File::Find::Rule
 perl Build.PL
 ./Build installdeps --cpan_client 'cpanm -nq --with-recommends'
 ./Build manifest
@@ -105,22 +105,7 @@ else
   ./Build
 fi
 
-H=$(hostname -s); 
-
-sed -i -E "s/REPLACE_HOSTNAME/${H}/g" /opt/prefix/app/deploy/nginx-site.conf
-sed -i -E "s/REPLACE_DOMAIN/${DOMAIN}/g" /opt/prefix/app/deploy/nginx-site.conf
-sed -i -E "s/REPLACE2/MODEREPLACE/g" /opt/prefix/app/deploy/nginx-site.conf
-# Setup nginx with app-specific config
-sudo /opt/prefix/bin/setup-nginx.sh
-
-# wait for cert
-sleep 120
-
-# Reload nginx with real certificate
-sudo systemctl reload nginx
-
-# Start the application service now that build is complete
-sudo systemctl start PREFIXREPLACE
+sudo systemctl start ${PREFIX}
 
 echo 'bootstrap complete - SUCCESS' | tee -a ${HOME}/var/log/bootstrap.log
 exit 0
