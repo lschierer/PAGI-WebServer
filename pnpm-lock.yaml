@@ -9,25 +9,25 @@ importers:
   .:
     devDependencies:
       '@types/node':
-        specifier: ^22.10.2
-        version: 22.19.3
+        specifier: ^25.2.1
+        version: 25.2.1
       aws-cdk-lib:
         specifier: ^2.237.1
         version: 2.237.1(constructs@10.4.5)
       cdk:
-        specifier: ^2.1104.0
-        version: 2.1104.0
+        specifier: ^2.1105.0
+        version: 2.1105.0
       constructs:
         specifier: ^10.4.5
         version: 10.4.5
       postcss:
-        specifier: ^8.5.0
+        specifier: ^8.5.6
         version: 8.5.6
       postcss-cli:
-        specifier: ^11.0.0
+        specifier: ^11.0.1
         version: 11.0.1(postcss@8.5.6)
       typescript:
-        specifier: ^5.7.2
+        specifier: ^5.9.3
         version: 5.9.3
 
 packages:
@@ -45,8 +45,8 @@ packages:
       - jsonschema
       - semver
 
-  '@types/node@22.19.3':
-    resolution: {integrity: sha512-1N9SBnWYOJTrNZCdh/yJE+t910Y128BoyY+zBLWhL3r0TYzlTmFdXrPwHL9DyFZmlEXNQQolTZh3KHV31QDhyA==}
+  '@types/node@25.2.1':
+    resolution: {integrity: sha512-CPrnr8voK8vC6eEtyRzvMpgp3VyVRhgclonE7qYi6P9sXwYb59ucfrnmFBTaP0yUi8Gk4yZg/LlTJULGxvTNsg==}
 
   ansi-regex@5.0.1:
     resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
@@ -78,8 +78,8 @@ packages:
       - yaml
       - mime-types
 
-  aws-cdk@2.1104.0:
-    resolution: {integrity: sha512-TGIK2Mpfqi0BA6Np9aJz0d5HAvTxWd17FrwtXlJuwqdQbR9R/IRqsabF6xRAuhFTz7/YrrHHU9H4VK/Xfnh7Vg==}
+  aws-cdk@2.1105.0:
+    resolution: {integrity: sha512-1RY2UZJv31XYobEGFHQEb7c2HXNzDbHuHqdnfdYyygvZW4Nrm8MJCW42lqItQCn+wF52Ixc7r2VR5eR4YGtVhA==}
     engines: {node: '>= 18.0.0'}
     hasBin: true
 
@@ -91,8 +91,8 @@ packages:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
 
-  cdk@2.1104.0:
-    resolution: {integrity: sha512-FDWVIGkq42g4s5wfigITjAFtRPvTCtXIULdbIyhZ9BPKx9R3fNKy1syIZ2mMHoYZ9NrL0illYIYooLgG/7XA0Q==}
+  cdk@2.1105.0:
+    resolution: {integrity: sha512-AFUU3G9MGizBl5QvGnHcx22y4e6fyG671ZGRER59ZDxAIVp9L9/iJwaHW/VxBCsTESrLxTyfmhD8LxX07hBqAg==}
     engines: {node: '>= 18.0.0'}
     hasBin: true
 
@@ -288,8 +288,8 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
-  undici-types@6.21.0:
-    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+  undici-types@7.16.0:
+    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
   universalify@2.0.1:
     resolution: {integrity: sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw==}
@@ -324,9 +324,9 @@ snapshots:
 
   '@aws-cdk/cloud-assembly-schema@48.20.0': {}
 
-  '@types/node@22.19.3':
+  '@types/node@25.2.1':
     dependencies:
-      undici-types: 6.21.0
+      undici-types: 7.16.0
 
   ansi-regex@5.0.1: {}
 
@@ -346,7 +346,7 @@ snapshots:
       '@aws-cdk/cloud-assembly-schema': 48.20.0
       constructs: 10.4.5
 
-  aws-cdk@2.1104.0: {}
+  aws-cdk@2.1105.0: {}
 
   binary-extensions@2.3.0: {}
 
@@ -354,9 +354,9 @@ snapshots:
     dependencies:
       fill-range: 7.1.1
 
-  cdk@2.1104.0:
+  cdk@2.1105.0:
     dependencies:
-      aws-cdk: 2.1104.0
+      aws-cdk: 2.1105.0
 
   chokidar@3.6.0:
     dependencies:
@@ -525,7 +525,7 @@ snapshots:
 
   typescript@5.9.3: {}
 
-  undici-types@6.21.0: {}
+  undici-types@7.16.0: {}
 
   universalify@2.0.1: {}
 
