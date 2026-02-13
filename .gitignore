@@ -13,3 +13,4 @@ Build
 cdk.out/
 cdk.context.json
 .cdk.staging/
+PAGI-WebServer.sublime-workspace
