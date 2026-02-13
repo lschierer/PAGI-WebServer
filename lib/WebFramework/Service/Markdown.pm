@@ -1,41 +1,53 @@
 package WebFramework::Service::Markdown;
+# cspell: disable
 use v5.42.0;
 use utf8::all;
 use Mooish::Base -standard;
 with 'WebFramework::Role::Logger';
-use Pandoc;
+use Text::Markdown::Discount;
 use Path::Tiny;
 use YAML::XS qw(Load);
 use Encode   qw(encode_utf8);
 require Mojo::DOM58;
 
-has pd => (
-  is      => 'lazy',
-  default => sub {
-    my $self = shift;
-    my $pd   = Pandoc->new;
+sub md ($self, $markdown_text) {
+    return "" unless defined $markdown_text;
 
-    return $pd;
-  }
-);
+    # Preprocess: Convert angle bracket links in reference definitions
+    # [label]: <./path with spaces> -> [label]: ./path%20with%20spaces
+    $markdown_text =~ s{^\[([^\]]+)\]:\s*<(\.\.?/[^>]+)>}{
+        my ($label, $path) = ($1, $2);
+        $path =~ s/ /%20/g;
+        "[$label]: $path"
+    }gme;
 
-has md_profile => (
-  is      => 'ro',
-  default => sub {
-    return join('+',
-      qw(commonmark alerts attributes autolink_bare_uris footnotes implicit_header_references pipe_tables raw_html rebase_relative_paths smart gfm_auto_identifiers)
-    );
-  },
-);
+    # Preprocess: Add zero-width space on line before each alert to break blockquote continuation
+    $markdown_text =~ s/^(> \[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\])/\x{200B}\n$1/gm;
+
+    # Combine flags for GFM-like behavior + Footnotes
+    my $flags = Text::Markdown::Discount::MKD_EXTRA_FOOTNOTE 
+              | Text::Markdown::Discount::MKD_DLEXTRA
+              | Text::Markdown::Discount::MKD_AUTOLINK 
+              | Text::Markdown::Discount::MKD_IDANCHOR 
+              | Text::Markdown::Discount::MKD_GITHUBTAGS 
+              | Text::Markdown::Discount::MKD_URLENCODEDANCHOR;
+
+    my $html = Text::Markdown::Discount::markdown($markdown_text, $flags);
+
+    # strip out the extra paragraphs we inserted to break up the sections. 
+    $html =~ s{<p>\s*\x{200B}\s*</p>}{}g;
+
+    # Fix for GFM Alerts - convert blockquotes with alert syntax to divs
+    $html =~ s{<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](.*?)</p>(.*?)</blockquote>}
+              {<div class="spectrum-AlertBanner is-open  spectrum-AlertBanner--\L$1\E"><p class="spectrum-Alert-Banner-body">$2</p>$3</div>}gis;
+
+    return $html;
+}
 
 sub build ($self) {
-  $self->pd($self->_build_pd);
-
+    Text::Markdown::Discount::with_html5_tags();
 }
 
-sub _build_pd {
-
-}
 
 sub parse_frontmatter {
   my ($self, $content) = @_;
@@ -64,10 +76,7 @@ sub parse_frontmatter {
 }
 
 sub markdown_string_to_html ($self, $md_content) {
-  my $html = $self->pd->convert(
-    $self->md_profile => 'html',
-    $md_content
-  );
+  my $html = $self->md($md_content);
 
   return $self->spectrum_formatting($html);
 }
@@ -79,10 +88,7 @@ sub render {
 
   my $content = path($markdown_file)->slurp_utf8;
 
-  my $html = $self->pd->convert(
-    $self->md_profile => 'html',
-    $content
-  );
+  my $html = $self->md($content);
 
   return $self->spectrum_formatting($html);
 }
@@ -96,8 +102,7 @@ sub render_with_frontmatter {
   my $content = path($markdown_file)->slurp_utf8;
   my ($frontmatter, $markdown) = $self->parse_frontmatter($content);
 
-  my $html = $self->pd->convert(
-    $self->md_profile => 'html',
+  my $html = $self->md(
     $markdown
   );
 
@@ -123,6 +128,10 @@ sub spectrum_formatting ($c, $html_content) {
 
   # Add paragraph classes
   $dom->find('p')->each(sub {
+    # Skip if already has spectrum classes (e.g., from alert formatting)
+    my $existing_class = $_->attr('class') // '';
+    return if $existing_class =~ /^spectrum/;
+    
     $_->attr(
       class => "spectrum-Body spectrum-Body--serif spectrum-Body--sizeM");
   });

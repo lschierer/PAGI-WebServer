@@ -1,0 +1,52 @@
+{
+	"folders":
+	[
+		{
+			"path": ".",
+			"file_exclude_patterns": [
+				"_build",
+				"blib",
+				"node_modules"
+			]
+		}
+	],
+	"LSP": {
+		"LSP-cspell" : {
+			"enabled": true,
+			"settings" : {
+                "cSpell.enabled"      : false,
+                "cSpell.useGitignore" : true,
+                "cSpell.diagnosticLevel" : "Warning",
+            }
+		},
+	},
+	"settings": {
+		"required_packages": [
+			"BracketHighlighter",
+			"Dictionary",
+			"Dockerfile Syntax Highlighting",
+			"EditorConfig",
+			"FileManager",
+			"Google Dictionary",
+			"LSP",
+			"LSP-eslint",
+			"LSP-json",
+			"LSP-typescript",
+			"Markdown Extended",
+			"MarkdownFootnotes",
+			"MarkdownPreview",
+			"NeoVintageous",
+			"Package Control",
+			"PerlTidy",
+			"Project Specific Syntax Settings",
+			"SideBarEnhancements",
+		],
+		"dictionary": "Packages/Language - English/en_US.dic",
+		"syntax_override": {
+			"Markdown": {
+				"spell_check": false,
+				"spelling_selector": "markup.raw, meta.header.toml, source string, source comment"
+			}
+		}
+	}	
+}

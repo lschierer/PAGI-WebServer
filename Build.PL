@@ -1,6 +1,9 @@
+# cspell: disable
+use v5.42.0;
 use strict;
 use warnings;
 use Module::Build;
+use Config;
 
 my $builder = Module::Build->new(
   module_name       => 'PAGI::WebServer',
@@ -46,6 +49,7 @@ my $builder = Module::Build->new(
     'Sereal::Encoder'     => '0',
     'Sys::Sendfile'       => '0',
     'Template'            => '0',
+    'Text::Markdown::Discount'  => '0',
     'Thunderhorse'        => '0.100',
     'Type::Tiny'          => '0',
     'URI'                 => '0',

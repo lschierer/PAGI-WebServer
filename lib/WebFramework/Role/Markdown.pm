@@ -1,4 +1,5 @@
 package WebFramework::Role::Markdown;
+# cspell: disable
 use v5.42.0;
 use utf8::all;
 use Mooish::Base -role;
@@ -131,8 +132,17 @@ sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
     $vars->{entries} = $autoindex;
   }
 
+  my $template = 'markdown';
+  if(exists $frontmatter->{collection}   && !!$frontmatter->{collection}){
+    if(exists $frontmatter->{template} && !!$frontmatter->{template} ){
+      $template = sprintf('%s/%s', $frontmatter->{collection}, $frontmatter->{template});
+    }
+  } elsif(exists $frontmatter->{template} && !!$frontmatter->{template} ) {
+    $template = $frontmatter->{template};
+  }
+
   my $tpl = $self->_build_template;
-  my $rh = $tpl->process('markdown', $vars,);
+  my $rh = $tpl->process($template, $vars,);
   #$self->logger->debug('returnable html: ' . $rh);
   return $rh;
 }

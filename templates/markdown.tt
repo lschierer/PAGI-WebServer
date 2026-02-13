@@ -3,6 +3,7 @@
       [% content %]
   </div>
   [% IF entries %]
+    <hr role="separator" class="spectrum-Divider spectrum-Divider--sizeM" />
     <div class="directory-index">
       [% INCLUDE partials/autoindex_list.tt entries=entries %]
     </div>
