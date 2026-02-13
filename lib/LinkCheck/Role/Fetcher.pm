@@ -25,11 +25,11 @@ sub _ua ($self) {
     $ua = Net::Async::HTTP->new(
       user_agent =>
         'Mozilla/5.0 (compatible; LinkChecker/1.0; +https://github.com)',
-      timeout                  => 60,    # start smaller while debugging
+      timeout                  => 120,    # increased for slow pages
       max_redirects            => 5,
       max_connections_per_host => 1,
       pipeline                 => 0,
-      stall_timeout            => 30,
+      stall_timeout            => 60,     # increased for slow pages
       close_after_request      => 0,     # better for stability
     );
 
@@ -83,9 +83,20 @@ sub fetch_one ($self, $url) {
       $res->{error} = "HTTP $res->{http_status}";
     }
 
+    # Debug logging for History page
+    if ($u->as_string =~ m{/Harrypedia/History$}) {
+      $self->logger->debug("Fetched History page: http_status=$res->{http_status}, ok=$res->{ok}, error=" . ($res->{error} // 'none'));
+    }
+
     return $res;
   })->catch(sub ($err) {
     $res->{error} = "$err";
+    
+    # Debug logging for History page
+    if ($u->as_string =~ m{/Harrypedia/History$}) {
+      $self->logger->debug("Fetch failed for History page: error=$err");
+    }
+    
     return $res;
   }); ###<-- line 90
 }

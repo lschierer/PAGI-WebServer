@@ -130,6 +130,12 @@ sub execute ($self) {
   for my $p (@all_page_summaries) {
     my $url = $p->{url} // next;
     $url = canon_url_string($url);
+    
+    # Debug logging for the specific page
+    if ($url =~ m{/Harrypedia/History$}) {
+      $self->logger->debug("Found History page in summaries: url=$url, ok=" . ($p->{ok} // 'undef') . ", http_status=" . ($p->{http_status} // 'undef'));
+    }
+    
     # Store what you need for validation
     $page_index->set(
       $url,
