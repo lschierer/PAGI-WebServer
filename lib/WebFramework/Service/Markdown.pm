@@ -13,13 +13,14 @@ require Mojo::DOM58;
 sub md ($self, $markdown_text) {
     return "" unless defined $markdown_text;
 
-    # Preprocess: Convert angle bracket links in reference definitions
-    # [label]: <./path with spaces> -> [label]: ./path%20with%20spaces
-    $markdown_text =~ s{^\[([^\]]+)\]:\s*<(\.\.?/[^>]+)>}{
-        my ($label, $path) = ($1, $2);
+    # Preprocess: Convert angle bracket links (reference and inline)
+    # [label]: </path with spaces> -> [label]: /path%20with%20spaces
+    # [text](</path with spaces>) -> [text](/path%20with%20spaces)
+    $markdown_text =~ s{<(/[^>]+)>}{
+        my $path = $1;
         $path =~ s/ /%20/g;
-        "[$label]: $path"
-    }gme;
+        $path
+    }ge;
 
     # Preprocess: Add zero-width space on line before each alert to break blockquote continuation
     $markdown_text =~ s/^(> \[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\])/\x{200B}\n$1/gm;
