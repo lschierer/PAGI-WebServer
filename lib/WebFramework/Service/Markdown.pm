@@ -26,6 +26,7 @@ sub md ($self, $markdown_text) {
 
     # Combine flags for GFM-like behavior + Footnotes
     my $flags = Text::Markdown::Discount::MKD_EXTRA_FOOTNOTE 
+              | Text::Markdown::Discount::MKD_TOC
               | Text::Markdown::Discount::MKD_DLEXTRA
               | Text::Markdown::Discount::MKD_AUTOLINK 
               | Text::Markdown::Discount::MKD_IDANCHOR 
