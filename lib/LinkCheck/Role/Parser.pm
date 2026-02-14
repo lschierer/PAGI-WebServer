@@ -10,6 +10,7 @@ use LinkCheck::Util qw(normalize_url_string);
 use Mojo::DOM58;
 use URI;
 use Scalar::Util qw(blessed);
+use HTML::Entities qw(decode_entities);
 
 # NOTE: parse_task is a Step task sub, not a method.
 # It must instantiate something that has parse_one + logger.
@@ -109,10 +110,11 @@ sub parse_one ($self, $item) {
     }
   }
 
-  # Regex fallback
+  # Regex fallback — decode HTML entities so that e.g. &#39; doesn't get
+  # misinterpreted as a URI fragment separator by URI->new.
   for my $raw (_scan_html_for_urls($body)) {
-    _classify_and_record($self, $url, $raw, $base_host, \@internal, \@external,
-      \@anchor_refs);
+    _classify_and_record($self, $url, decode_entities($raw), $base_host,
+      \@internal, \@external, \@anchor_refs);
   }
 
   # Dedupe
