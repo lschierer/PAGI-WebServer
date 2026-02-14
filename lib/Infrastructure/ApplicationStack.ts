@@ -100,7 +100,7 @@ export class ApplicationStack extends Stack {
 
     new route53.ARecord(this, `${this.appPrefix}WWWDNSRecord`, {
       zone: hostedZone,
-      recordName: `www.${props.appSubdomain}`,
+      recordName: props.mode === 'prod' ? props.appSubdomain : `www.${props.appSubdomain}`,
       target: route53.RecordTarget.fromIpAddresses(Instance.instancePublicIp),
       ttl: Duration.minutes(5),
     });
