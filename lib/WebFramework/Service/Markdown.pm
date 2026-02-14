@@ -16,7 +16,7 @@ sub md ($self, $markdown_text) {
     # Preprocess: Convert angle bracket links (reference and inline)
     # [label]: </path with spaces> -> [label]: /path%20with%20spaces
     # [text](</path with spaces>) -> [text](/path%20with%20spaces)
-    $markdown_text =~ s{<(/[^>]+)>}{
+    $markdown_text =~ s{<(\.\.?/[^>]+|/[^>]+)>}{
         my $path = $1;
         $path =~ s/ /%20/g;
         $path
