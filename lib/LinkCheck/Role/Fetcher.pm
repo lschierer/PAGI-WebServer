@@ -77,7 +77,10 @@ sub fetch_one ($self, $url) {
 
     if ($res->{http_status} >= 200 && $res->{http_status} < 400) {
       $res->{ok}   = 1;
-      $res->{body} = $response->decoded_content;    # optional
+      my $body = $response->decoded_content;
+      # Ensure body is a proper UTF-8 string, not bytes
+      utf8::decode($body) unless utf8::is_utf8($body);
+      $res->{body} = $body;
     }
     else {
       $res->{error} = "HTTP $res->{http_status}";
