@@ -1,3 +1,4 @@
+// cspell: disable
 import { Stack, type StackProps, Duration } from 'aws-cdk-lib';
 import { type Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

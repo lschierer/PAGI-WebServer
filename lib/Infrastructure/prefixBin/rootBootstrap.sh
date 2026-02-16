@@ -1,4 +1,5 @@
 #!/bin/bash
+# cspell: disable
 
 set -e 
 

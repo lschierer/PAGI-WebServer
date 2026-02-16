@@ -1,3 +1,4 @@
+// cspell: disable
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 //import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3Assets from 'aws-cdk-lib/aws-s3-assets';
@@ -360,7 +361,7 @@ export class CustomUbuntuUserData {
           // Script has its own retry logic, no systemd service needed
 
           ec2.InitCommand.shellCommand(
-            `echo "/opt/prefix/bin/rootBootstrap.sh --mode ${props.mode} --domain1 ${props.domainName}; >> /var/log/bootstrap.log" | at now + 2 minutes`,
+            `echo "/opt/prefix/bin/rootBootstrap.sh --mode ${props.mode} --domain1 ${props.domainName}; >> /var/log/bootstrap.log" | at now + 3 minutes`,
           ),
           // The PDL perl package compile takes *forever*, so give this a generous amount of time.
           ec2.InitCommand.shellCommand(
