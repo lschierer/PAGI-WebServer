@@ -115,7 +115,7 @@ while [ $ATTEMPT -le 5 ]; do
   
   CERTBOTRESULT=
   if [ ${MODE_VALUE} == 'prod' ]; then
-    certbot certonly --nginx -m 'staff@schierer.org' --agree-tos -d "${H}.${DOMAIN1}" -d "www.${DOMAIN1}" --non-interactive;
+    certbot certonly --nginx -m 'staff@schierer.org' --agree-tos -d "${H}.${DOMAIN1}" -d "www.${DOMAIN1}" -d "${DOMAIN1}" --non-interactive;
     CERTBOTRESULT=$?;
   else
     DOMAIN2="${MODE_VALUE}.${DOMAIN1}"
