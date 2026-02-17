@@ -73,6 +73,9 @@ export class ApplicationStack extends Stack {
       ],
     });
 
+    // Create DNS ready parameter name (will be created after DNS records)
+    const dnsReadyParamName = `/bootstrap/${Stack.of(this).stackName}/dns-ready`;
+
     const Instance = new UbuntuInstance(
       this,
     `${this.appPrefix}-${props.mode}-instance`,
@@ -80,6 +83,7 @@ export class ApplicationStack extends Stack {
       ...props,
       vpc,
       appCodeAsset,
+      dnsReadyParamName,
     },
     );
 
@@ -118,6 +122,23 @@ export class ApplicationStack extends Stack {
       value: `domainName: ${instanceDNS.domainName}; ip: ${Instance.instancePublicIp}`,
       description: 'The individual dns entry for the Ubuntu instance',
     });
+
+    // Grant instance permission to read DNS ready parameter (before creating it to avoid circular dependency)
+    const dnsReadyParamArn = `arn:aws:ssm:${Stack.of(this).region}:${Stack.of(this).account}:parameter${dnsReadyParamName}`;
+    Instance.instanceRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ['ssm:GetParameter'],
+        resources: [dnsReadyParamArn],
+      })
+    );
+
+    // Create SSM parameter after DNS records are created
+    const dnsReadyParam = new cdk.aws_ssm.StringParameter(this, `${this.appPrefix}DnsReady`, {
+      parameterName: dnsReadyParamName,
+      stringValue: new Date().toISOString(),
+      description: 'Signal that DNS records have been created',
+    });
+    dnsReadyParam.node.addDependency(instanceDNS);
 
     if (props.mode !== 'prod') {
       this.addSelfDestruct(24);

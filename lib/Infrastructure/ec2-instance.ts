@@ -17,6 +17,7 @@ import { type ApplicationStackProps } from './ApplicationStackProps.ts';
 export interface UbuntuInstanceProps extends ApplicationStackProps {
   vpc: ec2.IVpc | ec2.Vpc;
   appCodeAsset: s3assets.Asset;
+  dnsReadyParamName: string;
 }
 
 const genericLinuxImage = (scope: Stack | NestedStack) => {
@@ -52,6 +53,7 @@ export class UbuntuInstance extends ec2.Instance {
   // return the hostname to the parent so that I can create DNS records
   // these will be required for certbot to run.
   readonly hostname: string;
+  readonly instanceRole: cdk.aws_iam.Role;
 
   constructor(
     scope: NestedStack | Stack,
@@ -137,6 +139,7 @@ export class UbuntuInstance extends ec2.Instance {
     });
 
     this.hostname = hn;
+    this.instanceRole = instanceRole;
 
     console.log(`instance is at ${this.instancePublicDnsName}`);
 

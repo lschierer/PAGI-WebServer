@@ -72,6 +72,21 @@ if [ -z "$DOMAIN1" ]; then
   exit 1
 fi
 
+# Wait for DNS records to be created (signaled by SSM parameter)
+if [ -f /etc/stack.json ]; then
+  DNS_READY_PARAM=$(jq -r '.dnsReadyParam // empty' /etc/stack.json)
+  AWS_REGION=$(jq -r '.region // "us-east-2"' /etc/stack.json)
+  
+  if [ -n "$DNS_READY_PARAM" ]; then
+    echo "Waiting for DNS records to be created..."
+    while ! aws ssm get-parameter --name "$DNS_READY_PARAM" --region "$AWS_REGION" >/dev/null 2>&1; do
+      echo "DNS not ready yet, waiting 10 seconds..."
+      sleep 10
+    done
+    echo "DNS records confirmed ready"
+  fi
+fi
+
 /opt/prefix/bin/setup-cert.sh --mode ${MODE_VALUE} --domain1 ${DOMAIN1} >> /var/log/setup-cert.log 2>&1 
 /opt/prefix/bin/setup-nginx.sh --mode ${MODE_VALUE} --domain1 ${DOMAIN1} >> /var/log/setup-nginx.log 2>&1
 

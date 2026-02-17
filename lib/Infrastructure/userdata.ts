@@ -237,6 +237,7 @@ export class CustomUbuntuUserData {
             stackId: Stack.of(stack).stackId,
             stackName: Stack.of(stack).stackName,
             region: Stack.of(stack).region,
+            dnsReadyParam: props.dnsReadyParamName,
           }),
           ec2.InitService.enable('atd', {
             ensureRunning: true,
