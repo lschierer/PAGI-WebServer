@@ -132,11 +132,18 @@ sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
     $vars->{entries} = $autoindex;
   }
 
+  # Template selection priority:
+  # 1. Frontmatter template field
+  # 2. Controller override via $extra_vars->{template_override}
+  # 3. Default 'markdown'
   my $template = 'markdown';
-  if(exists $frontmatter->{collection}   && !!$frontmatter->{collection}){
+  
+  if(exists $frontmatter->{collection} && !!$frontmatter->{collection}){
     if(exists $frontmatter->{template} && !!$frontmatter->{template} ){
       $template = sprintf('%s/%s', $frontmatter->{collection}, $frontmatter->{template});
     }
+  } elsif(exists $extra_vars->{template_override} && $extra_vars->{template_override}) {
+    $template = $extra_vars->{template_override};
   } elsif(exists $frontmatter->{template} && !!$frontmatter->{template} ) {
     $template = $frontmatter->{template};
   }
