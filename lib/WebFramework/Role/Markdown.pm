@@ -94,7 +94,10 @@ sub parse_markdown_frontmatter ($self, $md_file_path) {
 sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
   my $md_file = Path::Tiny::path($md_file_path);
 
-  return unless $md_file->exists;
+  unless($md_file->exists){
+    $self->logger->warn("render_markdown_page called for non-existant file '$md_file_path'");
+    return;
+  }
 
   my ($frontmatter, $content_html) =
     $self->markdown->render_with_frontmatter($md_file->stringify);
