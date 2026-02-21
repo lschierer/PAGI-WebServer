@@ -84,6 +84,13 @@ sub add_outputs ($self) {
   }
   else {
     $maxlevel = 'notice';
+
+  }
+  if($self->can('app') && $self->app->can('config') && $self->app->config->get('log_config')){
+    my $LogConfig =  $self->app->config->get('log_config');
+    if(exists $LogConfig->{default}){
+      $maxlevel = lc($LogConfig->{default});
+    }
   }
 
   say "maxlevel is $maxlevel" if $self->debugLogging;
