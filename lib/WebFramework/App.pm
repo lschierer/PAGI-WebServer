@@ -1,4 +1,5 @@
 use v5.42.0;
+#cspell: disable 
 
 package WebFramework::App;
 use utf8::all;
