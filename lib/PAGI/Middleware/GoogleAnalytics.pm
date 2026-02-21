@@ -8,13 +8,12 @@ extends 'PAGI::Middleware';
 use Future::AsyncAwait;
 
 has ga_id => (is => 'ro', required => 1);
+has env => (is => 'ro', default => 'development');
 
 sub wrap ($self, $app) {
   return async sub ($scope, $receive, $send) {
     return await $app->($scope, $receive, $send) if $scope->{type} ne 'http';
-    
-    my $is_production = ($scope->{thunderhorse}->app->env // '') eq 'production';
-    return await $app->($scope, $receive, $send) unless $is_production;
+    return await $app->($scope, $receive, $send) unless $self->env eq 'production';
     
     my @body_parts;
     my $is_html = 0;
