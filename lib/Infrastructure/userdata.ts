@@ -127,6 +127,7 @@ export class CustomUbuntuUserData {
           ec2.InitPackage.apt('libgsl-dev'),
           ec2.InitPackage.apt('libgraphviz-dev'),
           ec2.InitPackage.apt('libcurl4-openssl-dev'),
+          ec2.InitPackage.apt('libmarkdown2-dev'),
           ec2.InitPackage.apt('libssl-dev'),
           ec2.InitPackage.apt('libtool'),
           ec2.InitPackage.apt('libxml2-dev'),

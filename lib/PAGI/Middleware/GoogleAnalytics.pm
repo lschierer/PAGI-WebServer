@@ -11,28 +11,39 @@ has ga_id => (is => 'ro', required => 1);
 
 sub wrap ($self, $app) {
   return async sub ($scope, $receive, $send) {
-    my $is_html = 0;
-    my $body = '';
+    return await $app->($scope, $receive, $send) if $scope->{type} ne 'http';
     
-    my $wrapped_send = $self->intercept_send($send, async sub ($event, $orig_send) {
+    my $is_production = ($scope->{thunderhorse}->app->env // '') eq 'production';
+    return await $app->($scope, $receive, $send) unless $is_production;
+    
+    my @body_parts;
+    my $is_html = 0;
+    my $original_headers;
+    
+    my $wrapped_send = async sub ($event) {
       if ($event->{type} eq 'http.response.start') {
-        $is_html = grep { $_->[0] eq 'content-type' && $_->[1] =~ m{text/html} } @{$event->{headers}};
+        $original_headers = $event->{headers};
+        $is_html = grep { lc($_->[0]) eq 'content-type' && $_->[1] =~ m{text/html} } @{$event->{headers} // []};
       }
-      elsif ($event->{type} eq 'http.response.body' && $is_html && $scope->{thunderhorse}->app->env eq 'production') {
-        $body .= $event->{body} // '';
-        return if !$event->{more_body};
-        
-        my $script = sprintf(
-          q{<script async src="https://www.googletagmanager.com/gtag/js?id=%s"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','%s');</script>},
-          $self->ga_id, $self->ga_id
-        );
-        $body =~ s{</head>}{$script</head>};
-        $event = {%$event, body => $body};
+      elsif ($event->{type} eq 'http.response.body') {
+        push @body_parts, $event->{body} // '';
       }
-      await $orig_send->($event);
-    });
+    };
     
     await $app->($scope, $receive, $wrapped_send);
+    
+    my $body = join('', @body_parts);
+    
+    if ($is_html && $body =~ m{</head>}) {
+      my $script = sprintf(
+        q{<script async src="https://www.googletagmanager.com/gtag/js?id=%s"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','%s');</script>},
+        $self->ga_id, $self->ga_id
+      );
+      $body =~ s{</head>}{$script</head>};
+    }
+    
+    await $send->({type => 'http.response.start', status => 200, headers => $original_headers});
+    await $send->({type => 'http.response.body', body => $body, more => 0});
   };
 }
 
