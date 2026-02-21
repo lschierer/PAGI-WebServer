@@ -314,8 +314,7 @@ sub _navigation_is_immediate_child ($self, $path1, $path2) {
 }
 
 sub _generate_sitemap ($self, $base_url = '') {
-  use URI::Escape qw(uri_escape_utf8 uri_unescape);
-
+  use URI;
 
   # Remove trailing slash from base_url
   $base_url =~ s|/$||;
@@ -339,10 +338,9 @@ sub _generate_sitemap ($self, $base_url = '') {
 
       # Add this path if it has a title (meaning it's a real route)
       if ($data->{title}) {
-        my $full_url = $base_url . $current_path;
+        my $uri = URI->new($base_url . $current_path);
         push @urls,
-          sprintf("  <url>\n    <loc>%s</loc>\n  </url>",
-          uri_escape_utf8($full_url));
+          sprintf("  <url>\n    <loc>%s</loc>\n  </url>", $uri->as_string);
       }
 
       # Recurse into children
