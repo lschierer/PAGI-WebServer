@@ -104,13 +104,7 @@ sub build ($self) {
       'ConditionalGet' => { _order => 8 },
     }
   );
-  if ($self->env eq 'production') {
-    $self->load_module(
-      'Middleware' => {
-        'HTTPSRedirect' => { _order => 4, hsts => 1 },
-      }
-    );
-  }
+  
 
   $self->logger->debug('WebFramework::App->build starting');
   my $router = $self->router;
