@@ -23,6 +23,7 @@ has app_config => (
 
 sub build ($self) {
   $self->SUPER::build();
+  my $router = $self->router;
 
   # Robots.txt route
   $router->add(
