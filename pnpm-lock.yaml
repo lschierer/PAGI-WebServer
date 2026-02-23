@@ -12,17 +12,17 @@ importers:
         specifier: ^0.13.10
         version: 0.13.10(typescript@5.9.3)(zod@4.3.6)
       '@types/node':
-        specifier: ^25.2.1
-        version: 25.2.1
+        specifier: ^25.3.0
+        version: 25.3.0
       aws-cdk-lib:
-        specifier: ^2.237.1
-        version: 2.237.1(constructs@10.4.5)
+        specifier: ^2.239.0
+        version: 2.239.0(constructs@10.5.1)
       cdk:
-        specifier: ^2.1105.0
-        version: 2.1105.0
+        specifier: ^2.1107.0
+        version: 2.1107.0
       constructs:
-        specifier: ^10.4.5
-        version: 10.4.5
+        specifier: ^10.5.1
+        version: 10.5.1
       postcss:
         specifier: ^8.5.6
         version: 8.5.6
@@ -44,8 +44,8 @@ packages:
   '@aws-cdk/asset-node-proxy-agent-v6@2.1.0':
     resolution: {integrity: sha512-7bY3J8GCVxLupn/kNmpPc5VJz8grx+4RKfnnJiO1LG+uxkZfANZG3RMHhE+qQxxwkyQ9/MfPtTpf748UhR425A==}
 
-  '@aws-cdk/cloud-assembly-schema@48.20.0':
-    resolution: {integrity: sha512-+eeiav9LY4wbF/EFuCt/vfvi/Zoxo8bf94PW5clbMraChEliq83w4TbRVy0jB9jE0v1ooFTtIjSQkowSPkfISg==}
+  '@aws-cdk/cloud-assembly-schema@50.4.0':
+    resolution: {integrity: sha512-9Cplwc5C+SNe3hMfqZET7gXeM68tiH2ytQytCi+zz31Bn7O3GAgAnC2dYe+HWnZAgVH788ZkkBwnYXkeqx7v4g==}
     engines: {node: '>= 18.0.0'}
     bundledDependencies:
       - jsonschema
@@ -68,8 +68,8 @@ packages:
       zod:
         optional: true
 
-  '@types/node@25.2.1':
-    resolution: {integrity: sha512-CPrnr8voK8vC6eEtyRzvMpgp3VyVRhgclonE7qYi6P9sXwYb59ucfrnmFBTaP0yUi8Gk4yZg/LlTJULGxvTNsg==}
+  '@types/node@25.3.0':
+    resolution: {integrity: sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A==}
 
   ansi-regex@5.0.1:
     resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
@@ -83,13 +83,14 @@ packages:
     resolution: {integrity: sha512-KMReFUr0B4t+D+OBkjR3KYqvocp2XaSzO55UcB6mgQMd3KbcE+mWTyvVV7D/zsdEbNnV6acZUutkiHQXvTr1Rw==}
     engines: {node: '>= 8'}
 
-  aws-cdk-lib@2.237.1:
-    resolution: {integrity: sha512-RH8mWHLBtc14stkeUF0gFLaWdS5iS2AHUHnoT5B5LLZfEkYP9G43LjJs0AMmpdlQ5/ZQVvCZ+VB83Q9vLxILRw==}
+  aws-cdk-lib@2.239.0:
+    resolution: {integrity: sha512-0qpYrE4HL6yRaQriRukfX7m82vNj3otce6v4Y5qK859ILdZBCaz/wqqYgdTnFh6LcA11GAg/Y8l8a+j/VtczyA==}
     engines: {node: '>= 18.0.0'}
     peerDependencies:
-      constructs: ^10.0.0
+      constructs: ^10.5.0
     bundledDependencies:
       - '@balena/dockerignore'
+      - '@aws-cdk/cloud-assembly-api'
       - case
       - fs-extra
       - ignore
@@ -101,8 +102,8 @@ packages:
       - yaml
       - mime-types
 
-  aws-cdk@2.1105.0:
-    resolution: {integrity: sha512-1RY2UZJv31XYobEGFHQEb7c2HXNzDbHuHqdnfdYyygvZW4Nrm8MJCW42lqItQCn+wF52Ixc7r2VR5eR4YGtVhA==}
+  aws-cdk@2.1107.0:
+    resolution: {integrity: sha512-7GKCq7p/33Jw+C+Ohwl4LnnKjvI/MzemeNZlTu/Kg8IwuZx5WEXEi32YLOlxbE1JOvleDslCWK5AIkBZ0omx/Q==}
     engines: {node: '>= 18.0.0'}
     hasBin: true
 
@@ -114,8 +115,8 @@ packages:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
 
-  cdk@2.1105.0:
-    resolution: {integrity: sha512-AFUU3G9MGizBl5QvGnHcx22y4e6fyG671ZGRER59ZDxAIVp9L9/iJwaHW/VxBCsTESrLxTyfmhD8LxX07hBqAg==}
+  cdk@2.1107.0:
+    resolution: {integrity: sha512-pmgQxvVbk3LQWzYSv6j3a28Z0/JgG7fBi9qNyXKWh5qcHoGOqtyjv0iLyq1AO7o0VxecfWhZ/So9PRQQmy2oHw==}
     engines: {node: '>= 18.0.0'}
     hasBin: true
 
@@ -134,8 +135,8 @@ packages:
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
 
-  constructs@10.4.5:
-    resolution: {integrity: sha512-fOoP70YLevMZr5avJHx2DU3LNYmC6wM8OwdrNewMZou1kZnPGOeVzBrRjZNgFDHUlulYUjkpFRSpTE3D+n+ZSg==}
+  constructs@10.5.1:
+    resolution: {integrity: sha512-f/TfFXiS3G/yVIXDjOQn9oTlyu9Wo7Fxyjj7lb8r92iO81jR2uST+9MstxZTmDGx/CgIbxCXkFXgupnLTNxQZg==}
 
   dependency-graph@1.0.0:
     resolution: {integrity: sha512-cW3gggJ28HZ/LExwxP2B++aiKxhJXMSIt9K48FOXQkm+vuG5gyatXnLsONRJdzO/7VfjDIiaOOa/bs4l464Lwg==}
@@ -311,8 +312,8 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
-  undici-types@7.16.0:
-    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
+  undici-types@7.18.2:
+    resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
   universalify@2.0.1:
     resolution: {integrity: sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw==}
@@ -348,16 +349,16 @@ snapshots:
 
   '@aws-cdk/asset-node-proxy-agent-v6@2.1.0': {}
 
-  '@aws-cdk/cloud-assembly-schema@48.20.0': {}
+  '@aws-cdk/cloud-assembly-schema@50.4.0': {}
 
   '@t3-oss/env-core@0.13.10(typescript@5.9.3)(zod@4.3.6)':
     optionalDependencies:
       typescript: 5.9.3
       zod: 4.3.6
 
-  '@types/node@25.2.1':
+  '@types/node@25.3.0':
     dependencies:
-      undici-types: 7.16.0
+      undici-types: 7.18.2
 
   ansi-regex@5.0.1: {}
 
@@ -370,14 +371,14 @@ snapshots:
       normalize-path: 3.0.0
       picomatch: 2.3.1
 
-  aws-cdk-lib@2.237.1(constructs@10.4.5):
+  aws-cdk-lib@2.239.0(constructs@10.5.1):
     dependencies:
       '@aws-cdk/asset-awscli-v1': 2.2.263
       '@aws-cdk/asset-node-proxy-agent-v6': 2.1.0
-      '@aws-cdk/cloud-assembly-schema': 48.20.0
-      constructs: 10.4.5
+      '@aws-cdk/cloud-assembly-schema': 50.4.0
+      constructs: 10.5.1
 
-  aws-cdk@2.1105.0: {}
+  aws-cdk@2.1107.0: {}
 
   binary-extensions@2.3.0: {}
 
@@ -385,9 +386,9 @@ snapshots:
     dependencies:
       fill-range: 7.1.1
 
-  cdk@2.1105.0:
+  cdk@2.1107.0:
     dependencies:
-      aws-cdk: 2.1105.0
+      aws-cdk: 2.1107.0
 
   chokidar@3.6.0:
     dependencies:
@@ -413,7 +414,7 @@ snapshots:
 
   color-name@1.1.4: {}
 
-  constructs@10.4.5: {}
+  constructs@10.5.1: {}
 
   dependency-graph@1.0.0: {}
 
@@ -556,7 +557,7 @@ snapshots:
 
   typescript@5.9.3: {}
 
-  undici-types@7.16.0: {}
+  undici-types@7.18.2: {}
 
   universalify@2.0.1: {}
 
