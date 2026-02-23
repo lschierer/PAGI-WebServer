@@ -55,6 +55,8 @@ sub build ($self) {
       to => sub ($self, $ctx) {
         my $APP_START_TIME = $self->app->config->{config}->{APP_START_TIME}
           // time();
+        my $deployment_env =
+          $self->app->config->{config}->{'EvonyTKR-Environment'} // {};
         
         # Determine if we're in EC2 or container environment
         my $is_ec2 = !$deployment_env->{'IMAGE_TAG'};
