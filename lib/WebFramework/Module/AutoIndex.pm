@@ -1,4 +1,5 @@
 package WebFramework::Module::AutoIndex;
+# cspell: disable
 use v5.42.0;
 use Mooish::Base -standard;
 extends 'Thunderhorse::Module';
@@ -27,7 +28,6 @@ has markdown => (
 
 sub build ($self) {
   weaken $self;
-  my $pages_dir = $self->pages_dir;
 
   # Register generate_directory_index method
   $self->add_method(
@@ -50,7 +50,7 @@ sub build ($self) {
           $name =~ s/_/ /g;
           $name = join(' ', map { ucfirst lc } split ' ', $name);
 
-          my $route = $child->relative($pages_dir);
+          my $route = $child->relative($self->pages_dir);
           $route = "/$route";
 
           push @entries,
@@ -82,7 +82,7 @@ sub build ($self) {
             || $self->_titleize($child->basename =~ s/\.md$//r);
           my $basename = $child->basename =~ s/\.md$//r;
 
-          my $route = $child->parent->relative($pages_dir);
+          my $route = $child->parent->relative($self->pages_dir);
           $route = "/$route/$basename";
           $route =~ s|//|/|g;    # Clean up double slashes
 

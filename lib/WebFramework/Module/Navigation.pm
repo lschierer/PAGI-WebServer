@@ -1,4 +1,5 @@
 package WebFramework::Module::Navigation;
+# cspell: disable
 use v5.42.0;
 use utf8::all;
 use Mooish::Base -standard;
