@@ -36,6 +36,7 @@ sub build ($self) {
 
       $path = path($path) unless ref $path eq 'Path::Tiny';
       $path = $path->parent if $path->basename eq 'index.md';
+      $path = $path->parent if $path->is_file;
 
       my @entries;
 
@@ -92,7 +93,7 @@ sub build ($self) {
             path      => $route,
             css_files => ['/css/gridIndex.css'],
             type      => 'file',
-            order     => $frontmatter->{sidebar}{order} // 999,
+            order     => (exists $frontmatter->{sidebar} && ref($frontmatter->{sidebar}) && exists $frontmatter->{sidebar}->{order}) ? $frontmatter->{sidebar}->{order} : 999,
             };
         }
         else {
