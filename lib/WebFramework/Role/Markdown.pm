@@ -69,8 +69,8 @@ sub _build_template ($self) {
   return Gears::Template::TT->new($config->%*);
 }
 
-sub parse_frontmatter_from_string ($self, $string){
-my ($yaml_text) = $string =~ /^---\s*\n(.*?)\n---/s;
+sub parse_frontmatter_from_string ($self, $string) {
+  my ($yaml_text) = $string =~ /^---\s*\n(.*?)\n---/s;
 
   return {} unless $yaml_text;
 
@@ -94,8 +94,9 @@ sub parse_markdown_frontmatter ($self, $md_file_path) {
 sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
   my $md_file = Path::Tiny::path($md_file_path);
 
-  unless($md_file->exists){
-    $self->logger->warn("render_markdown_page called for non-existant file '$md_file_path'");
+  unless ($md_file->exists) {
+    $self->logger->warn(
+      "render_markdown_page called for non-existant file '$md_file_path'");
     return;
   }
 
@@ -128,7 +129,7 @@ sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
     %$extra_vars,    # Allow caller to override/extend
   };
 
-  if(exists $frontmatter->{autoindex} && !!$frontmatter->{autoindex}){
+  if (exists $frontmatter->{autoindex} && !!$frontmatter->{autoindex}) {
     my $autoindex = $self->generate_directory_index($md_file);
 
     push @{ $vars->{css_files} }, '/css/directory-list.css';
@@ -140,19 +141,23 @@ sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
   # 2. Controller override via $extra_vars->{template_override}
   # 3. Default 'markdown'
   my $template = 'markdown';
-  
-  if(exists $frontmatter->{collection} && !!$frontmatter->{collection}){
-    if(exists $frontmatter->{template} && !!$frontmatter->{template} ){
-      $template = sprintf('%s/%s', $frontmatter->{collection}, $frontmatter->{template});
+
+  if (exists $frontmatter->{collection} && !!$frontmatter->{collection}) {
+    if (exists $frontmatter->{template} && !!$frontmatter->{template}) {
+      $template =
+        sprintf('%s/%s', $frontmatter->{collection}, $frontmatter->{template});
     }
-  } elsif(exists $extra_vars->{template_override} && $extra_vars->{template_override}) {
+  }
+  elsif (exists $extra_vars->{template_override}
+    && $extra_vars->{template_override}) {
     $template = $extra_vars->{template_override};
-  } elsif(exists $frontmatter->{template} && !!$frontmatter->{template} ) {
+  }
+  elsif (exists $frontmatter->{template} && !!$frontmatter->{template}) {
     $template = $frontmatter->{template};
   }
 
   my $tpl = $self->_build_template;
-  my $rh = $tpl->process($template, $vars,);
+  my $rh  = $tpl->process($template, $vars,);
   #$self->logger->debug('returnable html: ' . $rh);
   return $rh;
 }

@@ -9,7 +9,7 @@ use LinkCheck::Util qw(normalize_url_string);
 
 use Mojo::DOM58;
 use URI;
-use Scalar::Util qw(blessed);
+use Scalar::Util   qw(blessed);
 use HTML::Entities qw(decode_entities);
 
 # NOTE: parse_task is a Step task sub, not a method.
@@ -175,7 +175,7 @@ sub _classify_and_record ($self, $page_url, $raw, $base_host, $internal_ref,
   my $frag = $abs->fragment;
   $abs->fragment(undef);
 
-  my $canon = normalize_url_string( $abs);
+  my $canon = normalize_url_string($abs);
 
   my $host = lc($abs->host // '');
 

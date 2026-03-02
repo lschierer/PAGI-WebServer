@@ -33,13 +33,11 @@ sub build ($self) {
         my $host   = $ctx->req->headers->{'host'} // '';
         my $is_dev = $host =~ /dev|localhost|127\.0\.[0-9]{1}\.1/i;
 
-        my $base   = $ctx->req->scheme . '://' . $ctx->req->host . '/';
+        my $base = $ctx->req->scheme . '://' . $ctx->req->host . '/';
         my $robots =
           $is_dev
           ? "User-agent: *\nDisallow: /\n"
-          : "User-agent: *\nDisallow:\nSitemap: "
-          . $base
-          . "sitemap.xml\n";
+          : "User-agent: *\nDisallow:\nSitemap: " . $base . "sitemap.xml\n";
 
         $ctx->res->headers(content_type => 'text/plain');
         return $robots;
@@ -57,7 +55,7 @@ sub build ($self) {
           // time();
         my $deployment_env =
           $self->app->config->{config}->{'EvonyTKR-Environment'} // {};
-        
+
         # Determine if we're in EC2 or container environment
         my $is_ec2 = !$deployment_env->{'IMAGE_TAG'};
 
@@ -89,13 +87,13 @@ sub build ($self) {
               // 'unknown',
           };
         }
-        
+
         my $json = JSON::MaybeXS->new(utf8 => 1, pretty => 1);
 
         my $response = $json->encode({
-          status             => 'ok',
-          mode               => $self->app->env          // 'unknown',
-          version            => $self->app->config->{config}->{version} // 'unknown',
+          status  => 'ok',
+          mode    => $self->app->env                         // 'unknown',
+          version => $self->app->config->{config}->{version} // 'unknown',
           time               => scalar localtime,
           app_started_at     => scalar(localtime($APP_START_TIME)),
           app_uptime_seconds => time() - $APP_START_TIME,

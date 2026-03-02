@@ -56,15 +56,13 @@ sub _add_navigation_route ($self, $path, $title, $options = {}) {
     my $existing_order = $self->navigation_routes->{$path}{order} // 999;
     if ($existing_order <= $new_order) {
       $self->navigation_logger->debug(
-        "Skipping navigation route: $path => $title (order $new_order) "
-        . "-- existing entry has order $existing_order"
-      );
+            "Skipping navigation route: $path => $title (order $new_order) "
+          . "-- existing entry has order $existing_order");
       return $self;
     }
     $self->navigation_logger->debug(
-      "Overriding navigation route: $path => $title (order $new_order "
-      . "beats existing order $existing_order)"
-    );
+          "Overriding navigation route: $path => $title (order $new_order "
+        . "beats existing order $existing_order)");
   }
   else {
     $self->navigation_logger->debug("Adding navigation route: $path => $title");

@@ -3,7 +3,8 @@ use v5.42;
 use utf8::all;
 
 use Exporter 'import';
-our @EXPORT_OK = qw(normalize_url normalize_url_string canon_uri canon_url_string);
+our @EXPORT_OK =
+  qw(normalize_url normalize_url_string canon_uri canon_url_string);
 
 use Scalar::Util qw(blessed);
 use URI;
@@ -45,7 +46,7 @@ sub canon_uri ($u) {
   return $uri;
 }
 
-sub canon_url_string ($uri){
+sub canon_url_string ($uri) {
   return canon_uri($uri)->as_string;
 }
 

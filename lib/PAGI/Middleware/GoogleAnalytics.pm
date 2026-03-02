@@ -9,8 +9,9 @@ use Future::AsyncAwait;
 sub _init {
   my ($self, $config) = @_;
 
-  $self->{ga_id} = $config->{ga_id} // die "GoogleAnalytics middleware requires 'ga_id' option";
-  $self->{env}   = $config->{env}   // 'development';
+  $self->{ga_id} = $config->{ga_id}
+    // die "GoogleAnalytics middleware requires 'ga_id' option";
+  $self->{env} = $config->{env} // 'development';
 }
 
 sub wrap {
@@ -26,18 +27,18 @@ sub wrap {
     }
 
     my @body_parts;
-    my $is_html       = 0;
+    my $is_html = 0;
     my $original_start;
-    my $headers_sent   = 0;
+    my $headers_sent = 0;
 
     my $wrapped_send = async sub {
       my ($event) = @_;
 
       if ($event->{type} eq 'http.response.start') {
         $original_start = $event;
-        $is_html = grep {
-          lc($_->[0]) eq 'content-type' && $_->[1] =~ m{text/html}
-        } @{ $event->{headers} // [] };
+        $is_html =
+          grep { lc($_->[0]) eq 'content-type' && $_->[1] =~ m{text/html} }
+          @{ $event->{headers} // [] };
 
         # Non-HTML: forward immediately, don't buffer
         unless ($is_html) {
@@ -71,9 +72,8 @@ sub wrap {
     # Inject GA script before </head>
     if ($body =~ m{</head>}) {
       my $script = sprintf(
-        q{<script async src="https://www.googletagmanager.com/gtag/js?id=%s"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','%s');</script>},
-        $self->{ga_id}, $self->{ga_id}
-      );
+q{<script async src="https://www.googletagmanager.com/gtag/js?id=%s"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','%s');</script>},
+        $self->{ga_id}, $self->{ga_id});
       $body =~ s{</head>}{$script</head>};
     }
 

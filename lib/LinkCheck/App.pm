@@ -24,7 +24,7 @@ use Carp;
 has param start => (
   required => 1,
   is       => 'rw',
-  coerce   => sub  ($val) {
+  coerce   => sub ($val) {
     return ref($val) eq 'URI' ? $val : URI->new($val);
   },
   default => sub {
@@ -33,20 +33,18 @@ has param start => (
 );
 
 sub base {
-    my $self = shift;
-    my $u  = $self->start->clone;
-    say "start is $u";
-    $u->fragment(undef);
-    $u->query(undef);
-    $u->path('/');
-    my $h = {
-      host => lc($u->host),
-      url  => $u,
-    };
-    return $h;
-  }
-
-
+  my $self = shift;
+  my $u    = $self->start->clone;
+  say "start is $u";
+  $u->fragment(undef);
+  $u->query(undef);
+  $u->path('/');
+  my $h = {
+    host => lc($u->host),
+    url  => $u,
+  };
+  return $h;
+}
 
 has param workers => (
   is      => 'ro',
@@ -71,7 +69,7 @@ sub execute ($self) {
 
   my $start_url_str = $self->start->as_string;
 
-  unless(defined($self->start) && blessed($self->start)){
+  unless (defined($self->start) && blessed($self->start)) {
     croak('start must be defined as a URI');
     return;
   }
@@ -120,8 +118,8 @@ sub execute ($self) {
     }
     $self->logger->info(sprintf(
       "wave %d done: in=%d fetched=%d parsed=%d next=%d total_seen=%d",
-      $wave_num,        scalar(@wave),    scalar(@phase1), scalar(@phase2),
-      scalar(@pending), scalar(keys %seen),
+      $wave_num,       scalar(@wave),    scalar(@phase1),
+      scalar(@phase2), scalar(@pending), scalar(keys %seen),
     ));
   }
 
@@ -130,12 +128,15 @@ sub execute ($self) {
   for my $p (@all_page_summaries) {
     my $url = $p->{url} // next;
     $url = canon_url_string($url);
-    
+
     # Debug logging for the specific page
     if ($url =~ m{/Harrypedia/History$}) {
-      $self->logger->debug("Found History page in summaries: url=$url, ok=" . ($p->{ok} // 'undef') . ", http_status=" . ($p->{http_status} // 'undef'));
+      $self->logger->debug("Found History page in summaries: url=$url, ok="
+          . ($p->{ok} // 'undef')
+          . ", http_status="
+          . ($p->{http_status} // 'undef'));
     }
-    
+
     # Store what you need for validation
     $page_index->set(
       $url,
@@ -157,7 +158,8 @@ sub execute ($self) {
   my @validation_out = mce_step {
     task_name   => ['Validate'],
     max_workers => [$self->workers],
-    }, \&LinkCheck::Role::Validator::validate_task,
+    },
+    \&LinkCheck::Role::Validator::validate_task,
     \@all_page_summaries;
 
   my @final = map { ref($_) eq 'ARRAY' ? @$_ : $_ } @validation_out;
@@ -174,9 +176,10 @@ sub _done ($self, $final_results) {
 
   my $total_broken = 0;
 
-  @{ $final_results } = sort { $a->{source_url} cmp $b->{source_url} } $final_results->@*;
+  @{$final_results} =
+    sort { $a->{source_url} cmp $b->{source_url} } $final_results->@*;
 
-  foreach my $entry (@{ $final_results }) {
+  foreach my $entry (@{$final_results}) {
     my $url = $entry->{source_url};
 
     my @broken_internal = @{ $entry->{broken_internal_links} // [] };

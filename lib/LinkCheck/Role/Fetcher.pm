@@ -11,31 +11,30 @@ use Net::Async::HTTP;
 use Scalar::Util qw(blessed);
 use URI;
 
-
-sub _loop  {
+sub _loop {
   state $loop;
   $loop //= IO::Async::Loop->new;
-  return $loop
+  return $loop;
 }
 
 sub _ua ($self) {
-    state $ua;
-    return $ua if $ua;
+  state $ua;
+  return $ua if $ua;
 
-    $ua = Net::Async::HTTP->new(
-      user_agent =>
-        'Mozilla/5.0 (compatible; LinkChecker/1.0; +https://github.com)',
-      timeout                  => 120,    # increased for slow pages
-      max_redirects            => 5,
-      max_connections_per_host => 1,
-      pipeline                 => 0,
-      stall_timeout            => 60,     # increased for slow pages
-      close_after_request      => 0,     # better for stability
-    );
+  $ua = Net::Async::HTTP->new(
+    user_agent =>
+      'Mozilla/5.0 (compatible; LinkChecker/1.0; +https://github.com)',
+    timeout                  => 120,    # increased for slow pages
+    max_redirects            => 5,
+    max_connections_per_host => 1,
+    pipeline                 => 0,
+    stall_timeout            => 60,     # increased for slow pages
+    close_after_request      => 0,      # better for stability
+  );
 
-    $self->_loop->add($ua);
-    return $ua;
-  }
+  $self->_loop->add($ua);
+  return $ua;
+}
 
 sub fetch_task ($mce, $chunk_ref, $chunk_id) {
 
@@ -61,7 +60,8 @@ sub fetch_task ($mce, $chunk_ref, $chunk_id) {
 
 sub fetch_one ($self, $url) {
   my $u = blessed($url) && $url->isa('URI') ? $url : URI->new($url);
-  $self->logger->debug(sprintf('fetch_one called for "%s", a %s', $u, blessed($u)));
+  $self->logger->debug(
+    sprintf('fetch_one called for "%s", a %s', $u, blessed($u)));
   my $res = {
     url          => $u->as_string,
     ok           => 0,
@@ -76,7 +76,7 @@ sub fetch_one ($self, $url) {
     $res->{content_type} = $response->header('Content-Type');
 
     if ($res->{http_status} >= 200 && $res->{http_status} < 400) {
-      $res->{ok}   = 1;
+      $res->{ok} = 1;
       my $body = $response->decoded_content;
       # Ensure body is a proper UTF-8 string, not bytes
       utf8::decode($body) unless utf8::is_utf8($body);
@@ -88,20 +88,22 @@ sub fetch_one ($self, $url) {
 
     # Debug logging for History page
     if ($u->as_string =~ m{/Harrypedia/History$}) {
-      $self->logger->debug("Fetched History page: http_status=$res->{http_status}, ok=$res->{ok}, error=" . ($res->{error} // 'none'));
+      $self->logger->debug(
+"Fetched History page: http_status=$res->{http_status}, ok=$res->{ok}, error="
+          . ($res->{error} // 'none'));
     }
 
     return $res;
   })->catch(sub ($err) {
     $res->{error} = "$err";
-    
+
     # Debug logging for History page
     if ($u->as_string =~ m{/Harrypedia/History$}) {
       $self->logger->debug("Fetch failed for History page: error=$err");
     }
-    
+
     return $res;
-  }); ###<-- line 90
+  });    ###<-- line 90
 }
 
 1;

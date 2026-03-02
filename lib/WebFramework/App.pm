@@ -1,5 +1,5 @@
 use v5.42.0;
-#cspell: disable 
+#cspell: disable
 
 package WebFramework::App;
 use utf8::all;
@@ -90,21 +90,20 @@ sub build ($self) {
   );
   $self->load_module(
     'Middleware' => {
-      'ReverseProxy'   => { _order => 1 },
-      'RequestId'      => { _order => 2 },
-      'Runtime'        => { _order => 3 },
+      'ReverseProxy'    => { _order => 1 },
+      'RequestId'       => { _order => 2 },
+      'Runtime'         => { _order => 3 },
       'SecurityHeaders' => {
-        _order                  => 5,
-        x_frame_options         => 'DENY',
-        x_content_type_options  => 'nosniff',
-        x_xss_protection        => '1; mode=block',
+        _order                 => 5,
+        x_frame_options        => 'DENY',
+        x_content_type_options => 'nosniff',
+        x_xss_protection       => '1; mode=block',
       },
       'Head'           => { _order => 6 },
       'ContentLength'  => { _order => 7 },
       'ConditionalGet' => { _order => 8 },
     }
   );
-  
 
   $self->logger->debug('WebFramework::App->build starting');
   my $router = $self->router;

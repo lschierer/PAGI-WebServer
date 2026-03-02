@@ -93,7 +93,11 @@ sub build ($self) {
             path      => $route,
             css_files => ['/css/gridIndex.css'],
             type      => 'file',
-            order     => (exists $frontmatter->{sidebar} && ref($frontmatter->{sidebar}) && exists $frontmatter->{sidebar}->{order}) ? $frontmatter->{sidebar}->{order} : 999,
+            order     => (
+                   exists $frontmatter->{sidebar}
+                && ref($frontmatter->{sidebar})
+                && exists $frontmatter->{sidebar}->{order}
+            ) ? $frontmatter->{sidebar}->{order} : 999,
             };
         }
         else {

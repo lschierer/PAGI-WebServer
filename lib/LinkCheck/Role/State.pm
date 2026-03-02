@@ -3,7 +3,7 @@ use v5.42;
 use Mooish::Base -role;
 use Types::Standard ();
 require MCE::Shared;
-use Type::Utils     qw(declare as);
+use Type::Utils qw(declare as);
 
 use LinkCheck::Util qw(canon_uri);
 
