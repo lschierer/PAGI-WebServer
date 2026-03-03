@@ -69,9 +69,10 @@ sub _add_navigation_route ($self, $path, $title, $options = {}) {
   }
 
   $self->navigation_routes->{$path} = {
-    path  => $path,
-    title => $title,
-    order => $new_order,
+    path       => $path,
+    title      => $title,
+    order      => $new_order,
+    no_sitemap => $options->{no_sitemap} // 0,
     %$options,
   };
 
@@ -111,8 +112,9 @@ sub _insert_into_navigation_tree ($self, $tree, $path, $data) {
       # Leaf node - this is the actual route
       if (exists $current->{$segment}) {
         # Node already exists (probably as a parent), update its properties
-        $current->{$segment}{title} = $data->{title} if $data->{title};
-        $current->{$segment}{order} = $data->{order} if defined $data->{order};
+        $current->{$segment}{title}      = $data->{title} if $data->{title};
+        $current->{$segment}{order}      = $data->{order} if defined $data->{order};
+        $current->{$segment}{no_sitemap} = $data->{no_sitemap} if defined $data->{no_sitemap};
         # Keep is_leaf as 0 if it has children, otherwise set to 1
         $current->{$segment}{is_leaf} =
           (keys %{ $current->{$segment}{children} } == 0) ? 1 : 0;
@@ -120,11 +122,12 @@ sub _insert_into_navigation_tree ($self, $tree, $path, $data) {
       else {
         # New leaf node
         $current->{$segment} = {
-          path     => $accumulated_path,
-          title    => $data->{title},
-          order    => $data->{order},
-          is_leaf  => 1,
-          children => {},
+          path       => $accumulated_path,
+          title      => $data->{title},
+          order      => $data->{order},
+          no_sitemap => $data->{no_sitemap} // 0,
+          is_leaf    => 1,
+          children   => {},
         };
       }
     }
@@ -338,8 +341,10 @@ sub _generate_sitemap ($self, $base_url = '') {
       # Add this path if it has a title (meaning it's a real route)
       if ($data->{title}) {
         my $uri = URI->new($base_url . $current_path);
-        push @urls,
-          sprintf("  <url>\n    <loc>%s</loc>\n  </url>", $uri->as_string);
+        my $url = $uri->as_string;
+        # XML-escape the URL
+        $url =~ s/&/&amp;/g;
+        push @urls, sprintf("  <url>\n    <loc>%s</loc>\n  </url>", $url);
       }
 
       # Recurse into children
