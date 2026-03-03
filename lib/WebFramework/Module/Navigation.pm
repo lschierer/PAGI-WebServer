@@ -199,7 +199,7 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
     my $is_top_level = ($depth == 0);
 
     # Determine if this node should be expanded (showing children)
-    my $should_expand = $is_current || $is_ancestor || $is_top_level;
+    my $should_expand = $is_current || $is_ancestor;
 
     # Determine if this node itself should be visible
     my $parent_is_ancestor = 0;
