@@ -99,22 +99,24 @@ sub build ($self) {
                 && exists $frontmatter->{sidebar}->{order}
             ) ? $frontmatter->{sidebar}->{order} : 999,
             };
-        } elsif ($child->basename =~ /\.(?:pdf|epub|azw3)$/ ) {
+        }
+        elsif ($child->basename =~ /\.(?:pdf|epub|azw3)$/) {
           my $route = $child->relative($self->pages_dir);
           $route = "/$route";
-          
-          my $title = $child->basename( qr/\.(?:pdf|epub|azw3)$/ );
+
+          my $title = $child->basename(qr/\.(?:pdf|epub|azw3)$/);
           $title =~ s/_/ /g;
           my ($ext) = $child->basename =~ /\.([^.]+)$/;
           $title = "$title ($ext)";
 
-          push @entries, {
+          push @entries,
+            {
             title     => $title,
             path      => $route,
             css_files => ['/css/gridIndex.css'],
             type      => 'file',
             order     => 999,
-          };
+            };
         }
         else {
           $self->logger->warn("File with odd extension: $child");

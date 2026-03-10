@@ -156,11 +156,14 @@ sub spectrum_formatting ($c, $html_content) {
       my $inner_el = $_;
       my $outer_el = $inner_el->parent;
       # Only collapse if the outer has no other content besides the inner
-      return unless $outer_el->children->size == 1
+      return
+        unless $outer_el->children->size == 1
         && $outer_el->text =~ /^\s*$/;
-      my $span = $dom->new_tag('span',
+      my $span = $dom->new_tag(
+        'span',
         class => 'spectrum-Body-strong spectrum-Body-emphasized',
-        sub { $inner_el->content });
+        sub { $inner_el->content }
+      );
       $outer_el->replace($span);
     });
   }

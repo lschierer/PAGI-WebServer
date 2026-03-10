@@ -100,7 +100,7 @@ sub build ($self) {
           %$env_info,
         });
 
-        $ctx->res->content_type( 'application/json; charset=utf-8');
+        $ctx->res->content_type('application/json; charset=utf-8');
         return $response;
       },
       action => 'http.*',

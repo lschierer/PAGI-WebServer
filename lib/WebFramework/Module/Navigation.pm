@@ -112,9 +112,10 @@ sub _insert_into_navigation_tree ($self, $tree, $path, $data) {
       # Leaf node - this is the actual route
       if (exists $current->{$segment}) {
         # Node already exists (probably as a parent), update its properties
-        $current->{$segment}{title}      = $data->{title} if $data->{title};
-        $current->{$segment}{order}      = $data->{order} if defined $data->{order};
-        $current->{$segment}{no_sitemap} = $data->{no_sitemap} if defined $data->{no_sitemap};
+        $current->{$segment}{title} = $data->{title} if $data->{title};
+        $current->{$segment}{order} = $data->{order} if defined $data->{order};
+        $current->{$segment}{no_sitemap} = $data->{no_sitemap}
+          if defined $data->{no_sitemap};
         # Keep is_leaf as 0 if it has children, otherwise set to 1
         $current->{$segment}{is_leaf} =
           (keys %{ $current->{$segment}{children} } == 0) ? 1 : 0;
