@@ -1,5 +1,5 @@
 [tools]
-perl = "5.42.0"
+perl = "5.42.1"
 node = "lts"
 pnpm = "latest"
 pandoc = "latest"
