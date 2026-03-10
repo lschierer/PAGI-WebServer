@@ -42,6 +42,7 @@ sub build ($self) {
 
       foreach my $child ($path->children) {
         next if $child->basename eq 'index.md';
+        next if $child->basename eq '.cspell';
         $self->logger->debug("Inspecting: $child");
 
         if ($child->is_dir) {
