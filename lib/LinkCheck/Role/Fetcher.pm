@@ -1,4 +1,5 @@
 package LinkCheck::Role::Fetcher;
+# cspell: disable
 use v5.42;
 use utf8::all;
 
@@ -71,39 +72,45 @@ sub fetch_one ($self, $url) {
     body => undef,    # you can omit body if you only need headers in wave 1
   };
 
-  return $self->_ua->GET($u)->then(sub ($response) {
-    $res->{http_status}  = $response->code // 0;
-    $res->{content_type} = $response->header('Content-Type');
+  return $self->_ua->GET($u)
+    ->then(sub ($response) { $self->get_handler($res, $u, $response) })
+    ->catch(sub ($err, @) { $self->get_err_handler($res, $u, $err) });
+}
 
-    if ($res->{http_status} >= 200 && $res->{http_status} < 400) {
-      $res->{ok} = 1;
-      my $body = $response->decoded_content;
-      # Ensure body is a proper UTF-8 string, not bytes
-      utf8::decode($body) unless utf8::is_utf8($body);
-      $res->{body} = $body;
-    }
-    else {
-      $res->{error} = "HTTP $res->{http_status}";
-    }
+sub get_handler ($self, $res, $u, $response) {
+  $res->{http_status}  = $response->code // 0;
+  $res->{content_type} = $response->header('Content-Type');
 
-    # Debug logging for History page
-    if ($u->as_string =~ m{/Harrypedia/History$}) {
-      $self->logger->debug(
+  if ($res->{http_status} >= 200 && $res->{http_status} < 400) {
+    $res->{ok} = 1;
+    my $body = $response->decoded_content;
+    # Ensure body is a proper UTF-8 string, not bytes
+    utf8::decode($body) unless utf8::is_utf8($body);
+    $res->{body} = $body;
+  }
+  else {
+    $res->{error} = "HTTP $res->{http_status}";
+  }
+
+  # Debug logging for History page
+  if ($u->as_string =~ m{/Harrypedia/History$}) {
+    $self->logger->debug(
 "Fetched History page: http_status=$res->{http_status}, ok=$res->{ok}, error="
-          . ($res->{error} // 'none'));
-    }
+        . ($res->{error} // 'none'));
+  }
 
-    return $res;
-  })->catch(sub ($err) {
-    $res->{error} = "$err";
+  return $res;
+}
 
-    # Debug logging for History page
-    if ($u->as_string =~ m{/Harrypedia/History$}) {
-      $self->logger->debug("Fetch failed for History page: error=$err");
-    }
+sub get_err_handler ($self, $res, $u, $err) {
+  $res->{error} = "$err";
 
-    return $res;
-  });    ###<-- line 90
+  # Debug logging for History page
+  if ($u->as_string =~ m{/Harrypedia/History$}) {
+    $self->logger->debug("Fetch failed for History page: error=$err");
+  }
+
+  return $res;
 }
 
 1;
