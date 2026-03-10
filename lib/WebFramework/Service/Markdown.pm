@@ -149,6 +149,22 @@ sub spectrum_formatting ($c, $html_content) {
       class => "spectrum-Link spectrum-Link--primary spectrum-Link--quiet");
   });
 
+  # Collapse nested strong/em or em/strong into a single span with both classes
+  for my $outer (qw(strong em)) {
+    my $inner = $outer eq 'strong' ? 'em' : 'strong';
+    $dom->find("${outer} > ${inner}")->each(sub {
+      my $inner_el = $_;
+      my $outer_el = $inner_el->parent;
+      # Only collapse if the outer has no other content besides the inner
+      return unless $outer_el->children->size == 1
+        && $outer_el->text =~ /^\s*$/;
+      my $span = $dom->new_tag('span',
+        class => 'spectrum-Body-strong spectrum-Body-emphasized',
+        sub { $inner_el->content });
+      $outer_el->replace($span);
+    });
+  }
+
   # Add emphasis class
   $dom->find('em')->each(sub {
     $_->attr(class => "spectrum-Body-emphasized");
