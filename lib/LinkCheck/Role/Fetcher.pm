@@ -4,8 +4,6 @@ use v5.42;
 use utf8::all;
 
 use Mooish::Base -role;
-with 'LinkCheck::Role::Logger';
-require LinkCheck::Worker;
 
 use IO::Async::Loop;
 use Net::Async::HTTP;

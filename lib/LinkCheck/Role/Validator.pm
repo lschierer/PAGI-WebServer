@@ -1,9 +1,9 @@
 package LinkCheck::Role::Validator;
 use v5.42;
 use utf8::all;
+# cspell: disable
 
 use Mooish::Base -role;
-with 'LinkCheck::Role::Logger';
 
 use LinkCheck::Util qw(canon_url_string);
 

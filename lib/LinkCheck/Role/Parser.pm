@@ -1,9 +1,9 @@
 package LinkCheck::Role::Parser;
 use v5.42;
 use utf8::all;
+# cspell: disable
 
 use Mooish::Base -role;
-with 'LinkCheck::Role::Logger';
 
 use LinkCheck::Util qw(normalize_url_string);
 
@@ -14,7 +14,6 @@ use HTML::Entities qw(decode_entities);
 
 # NOTE: parse_task is a Step task sub, not a method.
 # It must instantiate something that has parse_one + logger.
-require LinkCheck::Worker;
 
 sub parse_task ($mce, $chunk_ref, $chunk_id) {
   state $worker_obj = LinkCheck::Worker->new();
