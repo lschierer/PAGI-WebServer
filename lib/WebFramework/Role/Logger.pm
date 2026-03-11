@@ -133,7 +133,6 @@ sub setup_access_log ($self) {
   $self->accessLogFH($access_fh);
 }
 
-
 sub logger {
   my $self = shift;
   state $l;

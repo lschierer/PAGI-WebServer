@@ -179,7 +179,6 @@ async sub on_startup ($self, $state) {
   $self->logger->debug("Application thread starting up");
 }
 
-
 sub sitemap ($self, $ctx) {
   my $base_url = $self->config->get('site_url') // '';
   my $xml      = $self->generate_sitemap($base_url);

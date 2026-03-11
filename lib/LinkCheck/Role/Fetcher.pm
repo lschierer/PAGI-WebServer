@@ -72,9 +72,9 @@ sub fetch_one ($self, $url) {
     body => undef,    # you can omit body if you only need headers in wave 1
   };
 
-  return $self->_ua->GET($u)
-    ->then(sub ($response) { $self->get_handler($res, $u, $response) })
-    ->catch(sub ($err, @) { $self->get_err_handler($res, $u, $err) });
+  return $self->_ua->GET($u)->then(sub ($response) {
+    $self->get_handler($res, $u, $response);
+  })->catch(sub ($err, @) { $self->get_err_handler($res, $u, $err) });
 }
 
 sub get_handler ($self, $res, $u, $response) {
