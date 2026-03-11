@@ -1,11 +1,12 @@
 package WebFramework::Controller::Base;
+#cspell: disable
 
 use v5.42.0;
 use utf8::all;
 use Mooish::Base -standard;
 extends 'Thunderhorse::Controller';
+with 'WebFramework::Role::Logger';
 with 'WebFramework::Role::Markdown';
-with 'WebFramework::Role::LogConfig';
 
 require JSON::MaybeXS;
 use Future::AsyncAwait;

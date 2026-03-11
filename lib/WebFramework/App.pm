@@ -109,14 +109,6 @@ sub build ($self) {
   my $router = $self->router;
 
   $router->add(
-    '/health',
-    {
-      to     => 'health',
-      action => 'http.get',
-    }
-  );
-
-  $router->add(
     '/sitemap.xml',
     {
       to     => 'sitemap',
@@ -187,46 +179,6 @@ async sub on_startup ($self, $state) {
   $self->logger->debug("Application thread starting up");
 }
 
-sub health ($self, $ctx) {
-  my $env         = $self->env;
-  my $connections = $self->server->connection_count;
-  my $maxconn     = $self->server->effective_max_connections;
-
-  # Use Data::Printer's plain text output for clean formatting
-  use Data::Printer;
-  my $config_dump = Data::Printer::np(
-    $self->config,
-    multiline => 1,
-    colored   => 0,            # Disable colors to avoid ANSI codes
-    theme     => 'Material',
-  );
-
-  my $module_dump = Data::Printer::np(
-    $self->modules,
-    multiline => 1,
-    colored   => 0,            # Disable colors to avoid ANSI codes
-    theme     => 'Material',
-  );
-
-  # Debug: check template configuration
-  use Cwd;
-  my $cwd = getcwd();
-  $self->logger->debug("Current working directory: $cwd");
-  my $tc = $self->config->{template} // {};
-  $self->logger->debug(
-    sprintf('Template config: "%s"', Data::Printer::np($tc) // ''));
-
-  return $self->template(
-    'health.tt',
-    {
-      env             => $env,
-      connections     => $connections,
-      max_connections => $maxconn,
-      config_dump     => $config_dump,
-      module_dump     => $module_dump,
-    }
-  );
-}
 
 sub sitemap ($self, $ctx) {
   my $base_url = $self->config->get('site_url') // '';

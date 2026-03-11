@@ -5,3 +5,6 @@ pnpm = "latest"
 pandoc = "latest"
 just = "latest"
 watchexec = "latest"
+
+[env]
+MOOISH_BASE_EXTRA_MODULES = "MooX::TypeTiny;MooX::XSConstructor"
