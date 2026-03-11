@@ -26,6 +26,7 @@ my $builder = Module::Build->new(
     'GraphViz2'                => 0,
     'HTML::FromANSI'           => 0,
     'HTML::Element'            => 0,
+    'HTML::HTML5::Entities'    => 0,
     'HTML::TreeBuilder'        => 0,
     'IO::Async'                => 0,
     'IO::Async::Loop'          => 0,
