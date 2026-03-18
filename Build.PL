@@ -92,12 +92,13 @@ my $builder = Module::Build->new(
     'Pod::Weaver::Role::SectionReplacer'            => 0,
     'Pod::Weaver::PluginBundle::ReplaceBoilerplate' => 0,
     'Pod::Weaver::Section::Leftovers'               => 0,
-    'Log::Any::Adapter'                             => 0,
   },
   # Mojolicious to provide Mojo::DOM
   test_requires => {
     'Test2::V0' => 0,
     'IO::Async::SSL'  => 0,
+    'Hook::AfterRuntime'  => 0,
+    'PAGI::Test::Client'  => 0,
   },
   add_to_cleanup     => ['PAGI-WebServer-*'],
   create_makefile_pl => 'traditional',
