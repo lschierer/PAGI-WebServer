@@ -182,6 +182,14 @@ sub spectrum_formatting ($c, $html_content) {
     $_->attr(class => 'spectrum-Divider spectrum-Divider--sizeM');
   });
 
+  # Style blockquotes using Spectrum tokens
+  $dom->find('blockquote')->each(sub {
+    $_->attr(
+      class => 'spectrum-Body spectrum-Body--sizeM',
+      style => 'border-inline-start: 4px solid var(--spectrum-accent-color-500); padding-block: var(--spectrum-spacing-200); padding-inline-start: var(--spectrum-spacing-300); margin-inline-start: 0; color: var(--spectrum-neutral-subdued-content-color-default);',
+    );
+  });
+
   # Add table classes
   $dom->find('table')->each(sub {
     $_->attr(class => 'spectrum-Table spectrum-Table--sizeM');
