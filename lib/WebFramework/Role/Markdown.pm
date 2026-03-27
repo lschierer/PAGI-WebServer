@@ -102,7 +102,7 @@ sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
   my ($frontmatter, $content_html) =
     $self->markdown->render_with_frontmatter($md_file->stringify);
 
-  $self->logger->debug(sprintf('content html is %s', $content_html));
+  #$self->logger->debug(sprintf('content html is %s', $content_html));
 
   # Use title from frontmatter or generate from path
   my $title = $frontmatter->{title};

@@ -58,6 +58,8 @@ has option chunk_size => (
 
 # entry point
 sub execute ($self) {
+  my $start_url_str = $self->start->as_string;
+
   MCE::Shared->start();
   MCE::Shared->init();
   MCE::Step->init(
@@ -66,8 +68,6 @@ sub execute ($self) {
     freeze      => \&encode_sereal,
     thaw        => \&decode_sereal,
   );
-
-  my $start_url_str = $self->start->as_string;
 
   unless (defined($self->start) && blessed($self->start)) {
     croak('start must be defined as a URI');

@@ -7,4 +7,4 @@ just = "latest"
 watchexec = "latest"
 
 [env]
-MOOISH_BASE_EXTRA_MODULES = "MooX::TypeTiny;MooX::XSConstructor"
+MOOISH_BASE_EXTRA_MODULES = "MooX::TypeTiny"

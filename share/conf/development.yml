@@ -32,4 +32,7 @@ pandoc_modules: []
 worker_threads: 4
 
 # Module-specific log levels
-log_config: {}
+log_config: 
+  default: DEBUG
+  'WebFramework': INFO
+  'LinkCheck::App': DEBUG
