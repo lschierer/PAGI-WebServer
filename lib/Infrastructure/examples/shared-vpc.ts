@@ -6,7 +6,7 @@ import {
   SharedVpcStack,
   ApplicationStack,
   type ApplicationStackProps,
-} from '../../../PAGI-WebServer/lib/Infrastructure/index.ts';
+} from '../index.ts';
 
 const app = new cdk.App();
 

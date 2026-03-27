@@ -14,7 +14,7 @@ import { CustomUbuntuUserData } from './userdata.ts';
 
 import { type ApplicationStackProps } from './ApplicationStackProps.ts';
 
-export interface UbuntuInstanceProps extends ApplicationStackProps {
+export interface UbuntuInstanceProps extends Omit<ApplicationStackProps, 'vpc'> {
   vpc: ec2.IVpc | ec2.Vpc;
   appCodeAsset: s3assets.Asset;
   dnsReadyParamName: string;
