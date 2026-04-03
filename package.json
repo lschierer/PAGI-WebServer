@@ -10,9 +10,9 @@
   "devDependencies": {
     "@t3-oss/env-core": "^0.13.11",
     "@tsconfig/node24": "^24.0.4",
-    "@types/node": "^25.5.0",
-    "aws-cdk-lib": "^2.244.0",
-    "cdk": "^2.1114.1",
+    "@types/node": "^25.5.2",
+    "aws-cdk-lib": "^2.248.0",
+    "cdk": "^2.1117.0",
     "constructs": "^10.6.0",
     "postcss": "^8.5.8",
     "postcss-cli": "^11.0.1",
