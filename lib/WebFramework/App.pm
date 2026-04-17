@@ -4,8 +4,9 @@ use v5.42.0;
 package WebFramework::App;
 use utf8::all;
 use Mooish::Base -standard;
-with 'WebFramework::Role::Logger';
 extends 'Thunderhorse::App';
+with 'WebFramework::Role::Logger';
+with 'WebFramework::Role::Navigation';
 
 #use Encode              qw(encode decode FB_DEFAULT FB_CROAK);
 require Data::Printer;

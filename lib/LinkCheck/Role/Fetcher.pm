@@ -59,7 +59,7 @@ sub fetch_task ($mce, $chunk_ref, $chunk_id) {
 
 sub fetch_one ($self, $url, $attempt = 0) {
   my $max_retries = 2;
-  my $u = blessed($url) && $url->isa('URI') ? $url : URI->new($url);
+  my $u           = blessed($url) && $url->isa('URI') ? $url : URI->new($url);
   $self->logger->debug(
     sprintf('fetch_one called for "%s", a %s', $u, blessed($u)));
   my $res = {
@@ -73,15 +73,18 @@ sub fetch_one ($self, $url, $attempt = 0) {
 
   return $self->_ua->GET($u)->then(sub ($response) {
     $self->get_handler($res, $u, $response);
-  })->catch(sub ($err, @) {
-    if ($attempt < $max_retries) {
-      $self->logger->debug("fetch_one retry ${\($attempt+1)} for $u: $err");
-      return $self->_loop->delay_future(after => 0.5 * (2 ** $attempt))
-        ->then(sub { $self->fetch_one($u, $attempt + 1) });
+  })->catch(
+    sub ($err, @) {
+      if ($attempt < $max_retries) {
+        $self->logger->debug("fetch_one retry ${\($attempt+1)} for $u: $err");
+        return $self->_loop->delay_future(after => 0.5 * (2**$attempt))
+          ->then(sub { $self->fetch_one($u, $attempt + 1) });
+      }
+      $self->logger->debug(
+        "fetch_one FAILED after ${\($attempt+1)} attempts for $u: $err");
+      $self->get_err_handler($res, $u, $err);
     }
-    $self->logger->debug("fetch_one FAILED after ${\($attempt+1)} attempts for $u: $err");
-    $self->get_err_handler($res, $u, $err);
-  });
+  );
 }
 
 sub get_handler ($self, $res, $u, $response) {
@@ -97,7 +100,8 @@ sub get_handler ($self, $res, $u, $response) {
   }
   else {
     $res->{error} = "HTTP $res->{http_status}";
-    $self->logger->debug("fetch non-ok status for $u: HTTP $res->{http_status}");
+    $self->logger->debug(
+      "fetch non-ok status for $u: HTTP $res->{http_status}");
   }
 
   # Debug logging for History page

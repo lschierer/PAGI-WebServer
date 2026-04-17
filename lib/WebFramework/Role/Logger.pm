@@ -58,17 +58,17 @@ sub log_base {
 }
 
 has 'accessLog' => (
-  is   => 'rw',
+  is      => 'rw',
   default => '',
-  lazy => 1,
+  lazy    => 1,
 );
 
 has 'accessLogFH' => (
-  is   => 'rw',
-  lazy => 1,
+  is      => 'rw',
+  lazy    => 1,
   default => sub {
     my $self = shift;
-    if(length($self->accessLog)) {
+    if (length($self->accessLog)) {
       open(my $access_fh, '>>:utf8', $self->accessLog->stringify)
         or die "Cannot open access log: $!";
       return $access_fh;

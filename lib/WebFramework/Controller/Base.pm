@@ -5,6 +5,7 @@ use v5.42.0;
 use utf8::all;
 use Mooish::Base -standard;
 extends 'Thunderhorse::Controller';
+with 'WebFramework::Role::Navigation';
 with 'WebFramework::Role::Logger';
 with 'WebFramework::Role::Markdown';
 

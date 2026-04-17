@@ -1,46 +1,37 @@
-package WebFramework::Module::Navigation;
+package WebFramework::Role::Navigation;
 # cspell: disable
 use v5.42.0;
 use utf8::all;
-use Mooish::Base -standard;
-with 'WebFramework::Role::Logger';
-extends 'Thunderhorse::Module';
+use Mooish::Base -role;
 
-has navigation_routes => (
-  is      => 'ro',
-  default => sub { {} },
-);
+our $_navigation_routes = {};
 
-has navigation_tree => (
-  is      => 'rw',
-  default => sub { {} },
-);
+sub navigation_routes ($self) {
+  return $_navigation_routes;
+}
+
+our $_navigation_tree = {};
+
+sub navigation_tree ($self) {
+  return $_navigation_tree;
+}
 
 has navigation_logger => (
   is      => 'lazy',
   default => sub { Log::Handler->create_logger(__PACKAGE__) },
 );
 
-sub build ($self) {
-  $self->add_method(
-    controller => add_navigation_route =>
-      sub ($controller, $path, $title, $options = {}) {
-      $self->_add_navigation_route($path, $title, $options);
-      return $controller;
-      }
-  );
+sub add_navigation_route ($controller, $path, $title, $options = {}) {
+  $controller->_add_navigation_route($path, $title, $options);
+  return $controller;
+}
 
-  $self->add_method(
-    controller => render_navigation => sub ($controller, $current_path = '/') {
-      return $self->_render_navigation($current_path);
-    }
-  );
+sub render_navigation ($controller, $current_path = '/') {
+  return $controller->_render_navigation($current_path);
+}
 
-  $self->add_method(
-    controller => generate_sitemap => sub ($controller, $base_url = '') {
-      return $self->_generate_sitemap($base_url);
-    }
-  );
+sub generate_sitemap ($controller, $base_url = '') {
+  return $controller->_generate_sitemap($base_url);
 }
 
 # Register a route for navigation
@@ -90,8 +81,8 @@ sub build_navigation_tree ($self) {
     $self->_insert_into_navigation_tree($tree, $path, $route_data);
   }
 
-  $self->navigation_tree($tree);
-  return $tree;
+  %$_navigation_tree = %$tree;
+  return $_navigation_tree;
 }
 
 # Insert a route into the tree structure
@@ -166,7 +157,8 @@ sub _render_navigation ($self, $current_path = '/') {
   $current_path =~ s|/$||;
 
   my $html =
-'<ul class="spectrum-TreeView spectrum-TreeView--quiet spectrum-TreeView--sizeM" role="tree">';
+      '<ul class="spectrum-TreeView spectrum-TreeView--quiet'
+    . ' spectrum-TreeView--sizeM" role="tree">';
   $html .=
     $self->_render_navigation_tree_level($self->navigation_tree, $current_path,
     '', 0);
@@ -244,7 +236,10 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
       # so use the same icon for both
       my $icon = 'ion:chevron-forward';
       $html .=
-qq|    <iconify-icon icon="$icon" class="spectrum-TreeView-itemIndicator spectrum-Icon spectrum-Icon--medium" role="img" ></iconify-icon>\n|;
+          sprintf('<iconify-icon icon="%s" ', $icon)
+        . 'class="spectrum-TreeView-itemIndicator spectrum-Icon spectrum-Icon--medium"'
+        . 'role="img" ></iconify-icon>';
+
       $itemIcon = "ion:folder-open-outline";
     }
     else {
@@ -354,7 +349,10 @@ sub _generate_sitemap ($self, $base_url = '') {
       }
     }
   };
-
+  $self->logger->debug(
+    sprintf('in _generate_sitemap navigation_tree is %s',
+      Data::Printer::np($self->navigation_tree))
+  );
   $collect_paths->($self->navigation_tree, '');
 
   my $xml = qq{<?xml version="1.0" encoding="UTF-8"?>\n};
