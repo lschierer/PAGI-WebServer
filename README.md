@@ -17,22 +17,22 @@ Install these tools using mise:
 - Node.js (LTS)
 - pnpm (latest)
 - pandoc (latest)
-- just (latest)
+- mise (latest) — tasks defined in mise.toml [tasks]
 
 ## Quick Start
 
 ```bash
 # Install tools and dependencies
-just install
+mise run install
 
 # Build the project
-just build
+mise run build
 
 # Run development server
-just dev
+mise run dev
 
 # Run production server  
-just prod
+mise run prod
 ```
 
 ## Configuration
@@ -74,5 +74,5 @@ $server->setup_logging;
 ## Testing
 
 ```bash
-just test
+mise run test
 ```

@@ -3,8 +3,55 @@ perl = "5.42.1"
 node = "lts"
 pnpm = "latest"
 pandoc = "latest"
-just = "latest"
 watchexec = "latest"
 
 [env]
 MOOISH_BASE_EXTRA_MODULES = "MooX::TypeTiny"
+
+[tasks.install]
+description = "Install dependencies"
+run = """
+mise install
+pnpm install
+perl Build.PL
+./Build installdeps
+"""
+
+[tasks.build]
+description = "Build the project"
+run = """
+./Build
+pnpm run build
+"""
+
+[tasks.tidy]
+description = "Format Perl code"
+run = """
+find lib -name '*.pm' -exec perltidy -b -pro=.perltidyrc {} \\;
+find t -name '*.t' -exec perltidy -b -pro=.perltidyrc {} \\;
+perltidy -b -pro=.perltidyrc Build.PL
+perltidy -b -pro=.perltidyrc bin/server.pl
+find . -name '*.bak' -delete
+"""
+
+[tasks.test]
+description = "Run tests"
+run = """
+./Build test
+pnpm test
+"""
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = """
+./Build clean
+pnpm run clean
+"""
+
+[tasks.dev]
+description = "Development server"
+run = "./Build && perl bin/server.pl"
+
+[tasks.prod]
+description = "Production server"
+run = "./Build && perl bin/server.pl --mode production"
