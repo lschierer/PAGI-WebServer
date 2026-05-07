@@ -1,7 +1,7 @@
 [tools]
 perl = "5.42.1"
 node = "lts"
-pnpm = { version = "10", backend = "npm" }
+pnpm = "latest"
 pandoc = "latest"
 watchexec = "latest"
 
