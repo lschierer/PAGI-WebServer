@@ -1,5 +1,6 @@
+# cspell: disable
 [tools]
-perl = "5.42.1"
+perl = "5.42.2"
 node = "lts"
 pnpm = "11"
 pandoc = "latest"
