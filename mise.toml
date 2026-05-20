@@ -5,6 +5,7 @@ node = "lts"
 pnpm = "11"
 pandoc = "latest"
 watchexec = "latest"
+coreutils = "latest"
 
 [env]
 MOOISH_BASE_EXTRA_MODULES = "MooX::TypeTiny"
