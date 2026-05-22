@@ -77,7 +77,7 @@ EOF
 # Install cpanm (not included with mise's perl by default)
 curl -L https://cpanmin.us | perl - App::cpanminus
 mise reshim
-cpanm --self-upgrade -q
+#cpanm --self-upgrade -q
 
 # Pre-install HTML::Tree family to avoid circular dependency issues
 cpanm -nq HTML::Tagset HTML::Parser HTML::Tree
