@@ -149,7 +149,7 @@ sub _navigation_path_segment_to_title ($self, $segment) {
 
 # Render the navigation tree as HTML
 sub _render_navigation ($self, $current_path = '/') {
-  # Ensure tree is built
+  # Ensure tree is built (only builds once since it checks for existing keys)
   $self->build_navigation_tree() unless keys %{ $self->navigation_tree };
 
   # Normalize current path
@@ -313,6 +313,7 @@ sub _navigation_is_immediate_child ($self, $path1, $path2) {
 
 sub _generate_sitemap ($self, $base_url = '') {
   use URI;
+  use Scalar::Util 'weaken';
 
   # Remove trailing slash from base_url
   $base_url =~ s|/$||;
@@ -354,6 +355,10 @@ sub _generate_sitemap ($self, $base_url = '') {
       Data::Printer::np($self->navigation_tree))
   );
   $collect_paths->($self->navigation_tree, '');
+
+  # Break the circular reference: closure references $collect_paths which
+  # references the closure
+  undef $collect_paths;
 
   my $xml = qq{<?xml version="1.0" encoding="UTF-8"?>\n};
   $xml .= qq{<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n};

@@ -21,6 +21,11 @@ has markdown => (
   },
 );
 
+has _template_instance => (
+  is      => 'lazy',
+  builder => '_build_template',
+);
+
 has pages_dir => (
   is      => 'ro',
   default => sub {
@@ -155,7 +160,7 @@ sub render_markdown_page ($self, $md_file_path, $url_path, $extra_vars = {}) {
     $template = $frontmatter->{template};
   }
 
-  my $tpl = $self->_build_template;
+  my $tpl = $self->_template_instance;
   my $rh  = $tpl->process($template, $vars,);
   #$self->logger->debug('returnable html: ' . $rh);
   return $rh;
