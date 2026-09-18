@@ -14,7 +14,7 @@
     "@types/postcss-import": "^14.0.3",
     "@types/postcss-sorting": "^8.0.2",
     "autoprefixer": "^10.6.1",
-    "aws-cdk-lib": "^2.269.0",
+    "aws-cdk-lib": "^2.270.0",
     "cdk": "^2.1142.0",
     "constructs": "^10.8.1",
     "cssnano": "^9.0.5",

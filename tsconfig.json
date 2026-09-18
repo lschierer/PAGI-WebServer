@@ -13,7 +13,10 @@
     "rootDir": ".",
     "skipLibCheck": true,
     "strict": true,
-    "types": ["node", ]
+    "types": ["node", ],
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true, 
   },
   "include": [ "./lib/**/*", "./scripts/**/*", "./types/**/*"],
   "exclude": ["node_modules", "dist"]
