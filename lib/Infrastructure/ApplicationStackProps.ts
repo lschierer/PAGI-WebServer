@@ -31,6 +31,16 @@ const ApplicationStackPropsSchema = z.object({
   appPort: z.number().min(3000).max(3999),
   instanceSize: z.enum(ec2.InstanceSize),
   mainPerlDistro: z.string(),
+  // Which branch of PAGI-WebServer the instance clones. Defaults to main.
+  //
+  // Exists so an unmerged framework branch can be exercised on a dev stack. The
+  // deploy scripts build from a commit, so before this a framework change could not
+  // be tested until it was already on main - which is the opposite of what branching
+  // the framework is for.
+  // Optional rather than defaulted: z.default() would make this REQUIRED in the
+  // inferred output type, which is what every stack's props object is typed against.
+  // The fallback to main lives at the substitution site in userdata.ts instead.
+  pagiBranch: z.string().optional(),
   appCodePath: z.string(),
   appCodeExcludes: z.string().array().optional(),
   vpc: z.instanceof(ec2.Vpc).optional(), // Optional: use shared VPC

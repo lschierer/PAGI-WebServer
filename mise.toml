@@ -2,7 +2,7 @@
 [tools]
 perl = "latest"
 node = "lts"
-pnpm = "11"
+pnpm = "12"
 pandoc = "latest"
 watchexec = "latest"
 coreutils = "latest"
