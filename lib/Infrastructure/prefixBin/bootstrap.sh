@@ -63,11 +63,16 @@ fi
 # before merging it - which defeats the point of branching the framework at all, since
 # the deploy scripts need a commit to work from. Set PAGI_BRANCH in the instance
 # environment (see userdata) to deploy a branch; it defaults to main.
+#
+# There is deliberately NO fallback for an unsubstituted token. The first version of
+# this had one, and it silently deployed main instead of the requested branch: the sed
+# in userdata.ts is global, so it rewrote the token in the guard's own pattern as well
+# as in the default, leaving `case "$PAGI_BRANCH" in consolidate-css-build) PAGI_BRANCH=main`.
+# The guard therefore fired exactly when substitution had SUCCEEDED, and the only
+# evidence was a framework checkout whose package.json was one commit behind.
+# An unsubstituted token now fails the clone loudly under `set -e`, which is the
+# behaviour we want - quietly building the wrong branch costs a whole deploy cycle.
 PAGI_BRANCH="${PAGI_BRANCH:-PAGIBRANCHREPLACE}"
-# If the token was never substituted (running this script straight out of the repo
-# rather than through userdata), fall back rather than trying to clone a branch
-# named after the placeholder.
-case "${PAGI_BRANCH}" in PAGIBRANCHREPLACE) PAGI_BRANCH=main ;; esac
 retry_with_backoff git clone -b "${PAGI_BRANCH}" https://github.com/lschierer/PAGI-WebServer.git /opt/prefix/PAGI-WebServer
 
 # Build PAGI-WebServer first
