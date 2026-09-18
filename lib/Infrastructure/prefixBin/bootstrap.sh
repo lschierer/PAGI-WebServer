@@ -56,8 +56,19 @@ if [ -n "$PROJECT_DIR" ] && [ "$PROJECT_DIR" != "app" ] && [ -d "$PROJECT_DIR" ]
   mv "$PROJECT_DIR" app
 fi
 
-# Clone PAGI-WebServer framework
-retry_with_backoff git clone -b main https://github.com/lschierer/PAGI-WebServer.git /opt/prefix/PAGI-WebServer
+# Clone PAGI-WebServer framework.
+#
+# The branch is overridable so an unmerged framework branch can actually be tested on
+# a dev stack. Hardcoded to main, there was no way to exercise a framework change
+# before merging it - which defeats the point of branching the framework at all, since
+# the deploy scripts need a commit to work from. Set PAGI_BRANCH in the instance
+# environment (see userdata) to deploy a branch; it defaults to main.
+PAGI_BRANCH="${PAGI_BRANCH:-PAGIBRANCHREPLACE}"
+# If the token was never substituted (running this script straight out of the repo
+# rather than through userdata), fall back rather than trying to clone a branch
+# named after the placeholder.
+case "${PAGI_BRANCH}" in PAGIBRANCHREPLACE) PAGI_BRANCH=main ;; esac
+retry_with_backoff git clone -b "${PAGI_BRANCH}" https://github.com/lschierer/PAGI-WebServer.git /opt/prefix/PAGI-WebServer
 
 # Build PAGI-WebServer first
 cd $PAGI_PATH
@@ -87,6 +98,16 @@ perl Build.PL
 ./Build installdeps --cpan_client 'cpanm -nq --with-recommends'
 ./Build manifest
 ./Build
+
+# The framework's NODE dependencies, not just its Perl ones.
+#
+# scripts/build-css.ts lives here now and the sites' builds import it, so the plugins
+# it calls (postcss and friends) must resolve from THIS directory's node_modules.
+# Without this the site build fails on the host at the first plugin import, while
+# succeeding locally where a developer has run install here by hand.
+export NODE_OPTIONS=--max_old_space_size=1536
+pnpm install
+unset NODE_OPTIONS
 
 # Build application
 cd $APP_PATH

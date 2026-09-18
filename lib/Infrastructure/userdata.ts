@@ -321,6 +321,9 @@ export class CustomUbuntuUserData {
             `sed -i -E 's|PROPSDOMAIN|${props.domainName}|g' /opt/prefix/bin/bootstrap.sh`
           ),
           ec2.InitCommand.shellCommand(
+            `sed -i -E 's|PAGIBRANCHREPLACE|${props.pagiBranch ?? 'main'}|g' /opt/prefix/bin/bootstrap.sh`
+          ),
+          ec2.InitCommand.shellCommand(
             'chmod 0755 /usr/local/bin/*.sh',
           ),
           ec2.InitCommand.shellCommand('mkdir -p /tmp/prefix_etc'),

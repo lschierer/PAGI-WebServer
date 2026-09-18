@@ -22,6 +22,9 @@ sudo systemctl stop ${SERVICE_NAME}
 echo "Building application..."
 sudo -u ${APP_USER} -s /bin/bash -l -c "cd ${PAGI_PATH} && mise install"
 sudo -u ${APP_USER} -s /bin/bash -l -c "cd ${PAGI_PATH} && mise reshim"
+# The framework's node deps: its scripts/build-css.ts is imported by the site build,
+# so the postcss plugins must resolve from the framework's own node_modules.
+sudo -u ${APP_USER} -s /bin/bash -l -c "cd ${PAGI_PATH} && export NODE_OPTIONS=--max_old_space_size=1536; pnpm install"
 sudo -u ${APP_USER} -s /bin/bash -l -c "cd ${PAGI_PATH} && perl Build.PL"
 sudo -u ${APP_USER} -s /bin/bash -l -c "cd ${PAGI_PATH} && ./Build installdeps --cpan_client 'cpanm -n'"
 sudo -u ${APP_USER} -s /bin/bash -l -c "cd ${PAGI_PATH} && ./Build manifest"
