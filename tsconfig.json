@@ -15,6 +15,6 @@
     "strict": true,
     "types": ["node", ]
   },
-  "include": [ "./lib/**/*", "./scripts/**/*"],
+  "include": [ "./lib/**/*", "./scripts/**/*", "./types/**/*"],
   "exclude": ["node_modules", "dist"]
 }
