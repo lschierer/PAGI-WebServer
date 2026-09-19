@@ -137,6 +137,22 @@ sub _insert_into_navigation_tree ($self, $tree, $path, $data) {
   }
 }
 
+# Escape text for interpolation into an HTML attribute.
+#
+# Added because the chevron button's aria-label interpolates a node title into an
+# attribute, where an unescaped quote would end the attribute early and corrupt the
+# markup. NOTE the element text and href elsewhere in _render_navigation_tree_level are
+# still interpolated raw; that is a pre-existing gap, not one this helper closes.
+sub _navigation_escape_html ($self, $text) {
+  return '' unless defined $text;
+  $text =~ s/&/&amp;/g;
+  $text =~ s/</&lt;/g;
+  $text =~ s/>/&gt;/g;
+  $text =~ s/"/&quot;/g;
+  $text =~ s/'/&#39;/g;
+  return $text;
+}
+
 # Convert path segment to title (e.g., "fan-fiction" => "Fan Fiction")
 sub _navigation_path_segment_to_title ($self, $segment) {
   # Capitalize each word, replace hyphens/underscores with spaces
@@ -219,7 +235,15 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
 
     my $class_str = join(' ', @classes);
 
-    $html .= qq|  <li id="item${index}" class="$class_str" role="treeitem"|;
+    # The id used to be "item$index", but $index is a per-sibling-list counter and this
+    # renderer recurses, so every level restarted at item0 - one live page carried 1090
+    # duplicate ids. Deriving it from the node's path makes it unique and stable across
+    # renders. Nothing currently reads these ids; they exist so that aria and deep links
+    # have something to point at.
+    my $item_id = 'nav-' . ($node_path =~ s{[^A-Za-z0-9_-]+}{-}gr);
+    $item_id =~ s/-+$//;
+
+    $html .= qq|  <li id="$item_id" class="$class_str" role="treeitem"|;
     $html .= qq| aria-expanded="true"|  if $should_expand  && $has_children;
     $html .= qq| aria-expanded="false"| if !$should_expand && $has_children;
     $html .= qq|>\n|;
@@ -230,25 +254,49 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
       qq|    <span class="$link_class spectrum-Link spectrum-Link--quiet">\n|;
 
     my $itemIcon;
-    # Icon for expandable items
     if ($has_children) {
-      # Spectrum-CSS rotates the icon 90 degrees when open,
-      # so use the same icon for both
-      my $icon = 'ion:chevron-forward';
+      # A BUTTON, not an <iconify-icon role="img">. The icon carried the click handler but
+      # was not focusable and had no button semantics, so expanding was mouse-only and
+      # every collapsed branch - display:none, hence absent from the accessibility tree -
+      # was unreachable by keyboard. That is a WCAG 2.1.1 (Keyboard, level A) failure, and
+      # Spectrum's own tree-view guidance calls for a collapse-and-expand button.
+      #
+      # aria-expanded is deliberately on both this button and the <li role="treeitem">:
+      # the li needs it to satisfy the tree role, the button needs it to describe what it
+      # does. lib/navigation.ts keeps the two in step.
+      my $expanded = $should_expand ? 'true' : 'false';
+      my $label    = $self->_navigation_escape_html($node->{title});
+
+      # Spectrum-CSS rotates the indicator 90 degrees when open, so one icon serves both
+      # states. aria-hidden because the button's own label already names the action.
       $html .=
-          sprintf('<iconify-icon icon="%s" ', $icon)
-        . 'class="spectrum-TreeView-itemIndicator spectrum-Icon spectrum-Icon--medium"'
-        . 'role="img" ></iconify-icon>';
+          qq|<button type="button" class="spectrum-TreeView-itemIndicator"|
+        . qq| aria-expanded="$expanded" aria-label="Toggle $label">|
+        . qq|<iconify-icon icon="ion:chevron-forward" aria-hidden="true"|
+        . qq| class="spectrum-Icon"></iconify-icon></button>|;
 
       $itemIcon = "ion:folder-open-outline";
     }
     else {
+      # Childless items had no indicator at all, so their label sat 10px to the left of a
+      # sibling folder's - the ragged edge visible whenever folders and files interleave
+      # in one sorted list. This reserves the same box without drawing anything.
+      $html .=
+        qq|<span class="spectrum-TreeView-itemIndicator |
+        . qq|spectrum-TreeView-itemIndicator--empty" aria-hidden="true"></span>|;
+
       $itemIcon = "ion:document-text-outline";
     }
 
+    # aria-current is the only machine-readable signal of which page is open. The
+    # is-selected class drives the visual treatment, but a class means nothing to a
+    # screen reader, so without this the current page was indicated to sighted users
+    # only.
+    my $aria_current = $is_current ? ' aria-current="page"' : '';
+
     $html .= qq|      <span class="spectrum-TreeView-itemLabel">
           <iconify-icon focusable="false" aria-hidden="true" role="img" class="spectrum-Icon spectrum-Icon--sizeM spectrum-TreeView-itemIcon" icon="${itemIcon}" ></iconify-icon>
-          <a href="$node->{path}" class="spectrum-Link spectrum-Link--secondary spectrum-Link--quiet">$node->{title}</a>
+          <a href="$node->{path}"$aria_current title="@{[ $self->_navigation_escape_html($node->{title}) ]}" class="spectrum-Link spectrum-Link--secondary spectrum-Link--quiet">$node->{title}</a>
          </span>\n|;
     $html .= qq|    </span>\n|;
 
