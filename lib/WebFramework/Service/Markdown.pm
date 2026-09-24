@@ -6,8 +6,8 @@ use Mooish::Base -standard;
 with 'WebFramework::Role::Logger';
 use Text::Markdown::Discount;
 use Path::Tiny;
-use YAML::XS qw(Load);
-use Encode   qw(encode_utf8);
+use YAML::XS      qw(Load);
+use Unicode::UTF8 qw(encode_utf8 decode_utf8);
 require Mojo::DOM58;
 
 sub md ($self, $markdown_text) {
@@ -29,13 +29,46 @@ sub md ($self, $markdown_text) {
   # Combine flags for GFM-like behavior + Footnotes
   my $flags =
     Text::Markdown::Discount::MKD_EXTRA_FOOTNOTE |
-    Text::Markdown::Discount::MKD_TOC | Text::Markdown::Discount::MKD_DLEXTRA |
+    Text::Markdown::Discount::MKD_TOC | 
+    Text::Markdown::Discount::MKD_DLEXTRA |
     Text::Markdown::Discount::MKD_AUTOLINK |
     Text::Markdown::Discount::MKD_IDANCHOR |
     Text::Markdown::Discount::MKD_GITHUBTAGS |
     Text::Markdown::Discount::MKD_URLENCODEDANCHOR;
 
-  my $html = Text::Markdown::Discount::markdown($markdown_text, $flags);
+  # Per https://metacpan.org/pod/Text::Markdown::Discount#Text::Markdown::Discount::with_html5_tags()
+  # this call cannot be enabled as a flag, nor chained with the markdown call. See the note under that anchor.
+  Text::Markdown::Discount::with_html5_tags();
+
+  # Text::Markdown::Discount is an XS wrapper around a C library: it consumes
+  # and returns raw UTF-8 *bytes*. Encode the (character) input to bytes for it,
+  # then decode the byte output back to characters so the regexes below and the
+  # downstream template pipeline all operate in character space.
+  my $html_bytes =
+    Text::Markdown::Discount::markdown(encode_utf8($markdown_text), $flags);
+
+  # Repair Discount's URL-anchor encoder, which percent-encodes the
+  # continuation bytes of a multibyte UTF-8 character in an href but leaves the
+  # leading byte raw (e.g. an em-dash U+2014 "E2 80 94" in a link path becomes
+  # "\xE2%80%94"). That hybrid is neither a valid raw character nor a valid
+  # percent-escape, and the stray high byte breaks a strict UTF-8 decode.
+  #
+  # Match ONLY that exact signature -- a UTF-8 lead byte immediately followed by
+  # its continuation bytes in percent-encoded form (%80-%BF) -- and reassemble
+  # the whole character as a fully percent-encoded sequence. A fully-raw
+  # non-ASCII URL (a valid IRI) is left untouched, because its continuation
+  # bytes are raw rather than percent-escaped.
+  $html_bytes =~
+    s{([\xC2-\xDF])((?:%[89ABab][0-9A-Fa-f]))}
+     {sprintf('%%%02X', ord $1) . $2}ge;
+  $html_bytes =~
+    s{([\xE0-\xEF])((?:%[89ABab][0-9A-Fa-f]){2})}
+     {sprintf('%%%02X', ord $1) . $2}ge;
+  $html_bytes =~
+    s{([\xF0-\xF4])((?:%[89ABab][0-9A-Fa-f]){3})}
+     {sprintf('%%%02X', ord $1) . $2}ge;
+
+  my $html = decode_utf8($html_bytes);
 
   # strip out the extra paragraphs we inserted to break up the sections.
   $html =~ s{<p>\s*\x{200B}\s*</p>}{}g;
