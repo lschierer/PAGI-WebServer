@@ -59,6 +59,10 @@ sub parse_one ($self, $item) {
     return $out;
   }
 
+  # Links resolve against where the page actually came from, which differs from
+  # $url after a redirect (see Fetcher::get_handler). $url stays the page's
+  # identity for reporting and for its own anchors.
+  my $base_url  = $item->{final_url} // $url;
   my $page_uri  = URI->new($url);
   my $base_host = lc($page_uri->host // '');
 
@@ -95,7 +99,7 @@ sub parse_one ($self, $item) {
       for my $e ($dom->find($sel)->each) {
         my $raw = $e->{$attr};
         next unless defined $raw && length $raw;
-        _classify_and_record($self, $url, $raw, $base_host, \@internal,
+        _classify_and_record($self, $url, $base_url, $raw, $base_host, \@internal,
           \@external, \@anchor_refs);
       }
 
@@ -103,7 +107,7 @@ sub parse_one ($self, $item) {
       for my $e ($dom->find($sel)->each) {
         my $raw = $e->{'xlink:href'};
         next unless defined $raw && length $raw;
-        _classify_and_record($self, $url, $raw, $base_host, \@internal,
+        _classify_and_record($self, $url, $base_url, $raw, $base_host, \@internal,
           \@external, \@anchor_refs);
       }
     }
@@ -112,7 +116,7 @@ sub parse_one ($self, $item) {
   # Regex fallback — decode HTML entities so that e.g. &#39; doesn't get
   # misinterpreted as a URI fragment separator by URI->new.
   for my $raw (_scan_html_for_urls($body)) {
-    _classify_and_record($self, $url, decode_entities($raw), $base_host,
+    _classify_and_record($self, $url, $base_url, decode_entities($raw), $base_host,
       \@internal, \@external, \@anchor_refs);
   }
 
@@ -156,7 +160,7 @@ sub _scan_html_for_urls ($html) {
   return @out;
 }
 
-sub _classify_and_record ($self, $page_url, $raw, $base_host, $internal_ref,
+sub _classify_and_record ($self, $page_url, $base_url, $raw, $base_host, $internal_ref,
   $external_ref, $anchor_refs_ref) {
   return if $raw =~ m{^(?:mailto:|tel:|javascript:|data:)}i;
 
@@ -169,7 +173,7 @@ sub _classify_and_record ($self, $page_url, $raw, $base_host, $internal_ref,
   }
 
   my $abs;
-  eval { $abs = URI->new_abs($raw, $page_url); 1 } or return;
+  eval { $abs = URI->new_abs($raw, $base_url); 1 } or return;
 
   my $frag = $abs->fragment;
   $abs->fragment(undef);

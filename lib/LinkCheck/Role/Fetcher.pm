@@ -91,6 +91,13 @@ sub get_handler ($self, $res, $u, $response) {
   $res->{http_status}  = $response->code // 0;
   $res->{content_type} = $response->header('Content-Type');
 
+  # After a redirect the response's request is the last one made, and a browser
+  # resolves the page's relative links against THAT URL, not the one first asked
+  # for -- /dir redirected to /dir/ changes what "../x" means. Recorded only
+  # when it differs, for the parser to use as its base.
+  my $final = $response->request ? $response->request->uri : undef;
+  $res->{final_url} = "$final" if $final && "$final" ne $u->as_string;
+
   if ($res->{http_status} >= 200 && $res->{http_status} < 400) {
     $res->{ok} = 1;
     my $body = $response->decoded_content;
