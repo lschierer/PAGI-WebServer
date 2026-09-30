@@ -47,11 +47,24 @@ sub md ($self, $markdown_text) {
   my $html_bytes =
     Text::Markdown::Discount::markdown(encode_utf8($markdown_text), $flags);
 
-  # Repair Discount's URL-anchor encoder, which percent-encodes the
-  # continuation bytes of a multibyte UTF-8 character in an href but leaves the
-  # leading byte raw (e.g. an em-dash U+2014 "E2 80 94" in a link path becomes
+  # Repair Discount's URL encoder, which percent-encodes the continuation
+  # bytes of a multibyte UTF-8 character in an href but leaves the leading
+  # byte raw (e.g. an em-dash U+2014 "E2 80 94" in a link path becomes
   # "\xE2%80%94"). That hybrid is neither a valid raw character nor a valid
   # percent-escape, and the stray high byte breaks a strict UTF-8 decode.
+  #
+  # The cause is upstream, in the C library, and depends on the locale.
+  # puturl() and mkd_anchor_format() classify each byte with isalnum(),
+  # ispunct() and isspace(), whose answers for bytes 0x80-0xFF follow
+  # LC_CTYPE; in macOS's UTF-8 locale isalnum(0xE2) and isspace(0xA0) are
+  # true. Perl sets LC_CTYPE from the environment at startup, so this binding
+  # hits it. The discount CLI never calls setlocale() and always runs in the C
+  # locale, which is why it encodes correctly. Reported upstream as
+  # https://github.com/Orc/discount/issues/310, fixed by
+  # https://github.com/Orc/discount/pull/311; first reported against the
+  # binding as https://github.com/Songmu/text-markdown-discount/issues/46.
+  # Still present in discount 3.0.2.0 (Text::Markdown::Discount 0.19). Remove
+  # this repair once a release carrying #311 reaches the binding.
   #
   # Match ONLY that exact signature -- a UTF-8 lead byte immediately followed by
   # its continuation bytes in percent-encoded form (%80-%BF) -- and reassemble
@@ -68,7 +81,24 @@ sub md ($self, $markdown_text) {
     s{([\xF0-\xF4])((?:%[89ABab][0-9A-Fa-f]){3})}
      {sprintf('%%%02X', ord $1) . $2}ge;
 
-  my $html = decode_utf8($html_bytes);
+  # Decode Discount's byte output back to characters. This is needed on every
+  # call, not just the broken ones: bytes go in, so bytes always come out, even
+  # when the output is perfectly valid UTF-8.
+  #
+  # The warnings scope, on the other hand, exists only for broken output. The
+  # same upstream bug (Orc/discount#310, above) also breaks heading anchor ids,
+  # which the repair above does not touch: an emoji in a heading yields
+  # id="\xE2-9a--a0--b", or with MKD_URLENCODEDANCHOR id="\xE2\x9A%a0...",
+  # neither well-formed UTF-8. Unicode::UTF8::decode_utf8 replaces an
+  # ill-formed sequence with U+FFFD by default, but also emits a 'utf8'
+  # warning, and this module runs under utf8::all, which makes 'utf8' warnings
+  # FATAL. So the decode runs with that one category silenced, and a bad
+  # anchor costs one U+FFFD rather than the page.
+  my $html;
+  {
+    no warnings 'utf8';
+    $html = decode_utf8($html_bytes);
+  }
 
   # strip out the extra paragraphs we inserted to break up the sections.
   $html =~ s{<p>\s*\x{200B}\s*</p>}{}g;
