@@ -7,6 +7,8 @@ use Mooish::Base -role;
 use Log::Handler;
 use File::HomeDir::Tiny ();
 use Carp;
+require Data::Printer;    # setup() calls Data::Printer::np when debugLogging is on
+require Path::Tiny;       # ... and Path::Tiny::path for its log files
 
 has debugLogging => (
   is      => 'ro',
