@@ -4,6 +4,8 @@ use v5.42.0;
 use utf8::all;
 use Mooish::Base -role;
 
+require Path::Tiny;
+
 # The navigation tree used to live in THIS PACKAGE's globals ($_navigation_routes etc.), shared by
 # every consumer only because a role's package subs are the same subs no matter which instance calls
 # them -- an accident of how roles compose, not a real shared store. That accident also meant the
@@ -23,6 +25,30 @@ my $NAV_KEY = '_navigation';
 sub _navigation_store ($self) {
   my $conf = $self->config->config;
   return $conf->{$NAV_KEY} //= { routes => {}, tree => {}, built_for_count => -1 };
+}
+
+# The three icons the tree needs, as raw <svg> markup (share/icons/*.svg, sibling to lib/), read
+# ONCE per process and cached -- never a per-node file read. Inlined directly into each <li> instead
+# of an <iconify-icon> custom element: that element was measured (a controlled headless-Chrome test,
+# not a guess) at roughly 4x the real DOM node count and 33x the JS heap of the same number of plain
+# elements, because each instance builds its own shadow DOM internally, REGARDLESS of whether it is
+# ever visible -- and a typical page here renders a few hundred visible nodes against tens of
+# thousands of permanently display:none ones (nav-hidden), so that per-instance cost was being paid
+# tens of thousands of times over for nothing anyone ever saw. A real captured page's worth of
+# <iconify-icon> tags measured at ~1GB of actual browser process memory for that reason alone. Raw
+# inline SVG has no shadow DOM and no JS component instantiation at all: the earlier measurement's
+# "plain span" control, but with the real icon shape drawn via markup instead of a custom element.
+my %_ICON_CACHE;
+
+sub _icon_svg ( $self, $name ) {
+  return $_ICON_CACHE{$name} //= do {
+    my $file = Path::Tiny::path(__FILE__)->absolute->parent(4)
+      ->child("share/icons/$name.svg");    # lib/WebFramework/Role/Navigation.pm -> repo root
+    my $svg = $file->is_file ? $file->slurp_utf8 : '';
+    $svg =~ s/\A<\?xml[^>]*\?>\s*//;        # strip an XML prolog if the source file has one
+    $svg =~ s/\s+\z//;
+    $svg;
+  };
 }
 
 sub navigation_routes ($self) {
@@ -312,13 +338,17 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
 
       # Spectrum-CSS rotates the indicator 90 degrees when open, so one icon serves both
       # states. aria-hidden because the button's own label already names the action.
+      # The chevron is inline SVG (see _icon_svg), not an <iconify-icon> custom element --
+      # see this file's header comment for why: raw SVG carries no shadow DOM and
+      # instantiates no JS component, where an <iconify-icon> paid that cost even for the
+      # ~95% of nodes that stay display:none their whole life.
       $html .=
           qq|<button type="button" class="spectrum-TreeView-itemIndicator"|
         . qq| aria-expanded="$expanded" aria-label="Toggle $label">|
-        . qq|<iconify-icon icon="ion:chevron-forward" aria-hidden="true"|
-        . qq| class="spectrum-Icon"></iconify-icon></button>|;
+        . $self->_icon_svg('ion--chevron-forward')
+        . qq|</button>|;
 
-      $itemIcon = "ion:folder-open-outline";
+      $itemIcon = 'ion--folder-open-outline';
     }
     else {
       # Childless items had no indicator at all, so their label sat 10px to the left of a
@@ -328,7 +358,7 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
         qq|<span class="spectrum-TreeView-itemIndicator |
         . qq|spectrum-TreeView-itemIndicator--empty" aria-hidden="true"></span>|;
 
-      $itemIcon = "ion:document-text-outline";
+      $itemIcon = 'ion--document-text-outline';
     }
 
     # aria-current is the only machine-readable signal of which page is open. The
@@ -338,7 +368,7 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
     my $aria_current = $is_current ? ' aria-current="page"' : '';
 
     $html .= qq|      <span class="spectrum-TreeView-itemLabel">
-          <iconify-icon focusable="false" aria-hidden="true" role="img" class="spectrum-Icon spectrum-Icon--sizeM spectrum-TreeView-itemIcon" icon="${itemIcon}" ></iconify-icon>
+          <span focusable="false" aria-hidden="true" role="img" class="spectrum-Icon spectrum-Icon--sizeM spectrum-TreeView-itemIcon">@{[ $self->_icon_svg($itemIcon) ]}</span>
           <a href="$node->{path}"$aria_current title="@{[ $self->_navigation_escape_html($node->{title}) ]}" class="spectrum-Link spectrum-Link--secondary spectrum-Link--quiet">$node->{title}</a>
          </span>\n|;
     $html .= qq|    </span>\n|;
