@@ -9,6 +9,9 @@ MYMETA.json
 MYMETA.yml
 Build
 
+pnpm-lock.yaml
+.DS_Store
+
 # CDK
 cdk.out/
 cdk.context.json
