@@ -16,10 +16,37 @@ sub navigation_tree ($self) {
   return $_navigation_tree;
 }
 
+# How many routes the tree currently rendered was built from. Routes can arrive after
+# startup (a controller may register a child route once data that was not available at
+# `build()` time -- e.g. a long-running computation's result -- is known), so "built at
+# least once" is not enough to know the tree is current; this compares against the
+# route count at render time instead. A plain count, not a route-identity diff: routes
+# are only ever added (see _add_navigation_route's existing-order-wins rule), never
+# removed, over a process's life, so a count catches every addition without the cost of
+# diffing the hash.
+our $_navigation_built_for_count = -1;
+
 has navigation_logger => (
   is      => 'lazy',
   default => sub { Log::Handler->create_logger(__PACKAGE__) },
 );
+
+# A module-level logger, shared with the `navigation_logger` attribute's default, for
+# code paths that call the navigation API as a class method rather than on a live,
+# already-built controller instance -- e.g. a non-controller object (RunStore) that
+# learns of new routes (new clan pages) only after a long-running computation finishes,
+# well outside any request/controller lifecycle, and has no live controller instance to
+# call through. `->navigation_logger` is a Mooish attribute accessor: it reads/writes an
+# instance slot, so calling it on a bare class name fails ("can't use string as a HASH
+# reference") before ever reaching the logging call it guards. This free function has no
+# such requirement.
+my $_navigation_class_logger;
+
+sub _navigation_logger_for ($controller_or_self) {
+  return $controller_or_self->navigation_logger
+    if ref $controller_or_self;
+  return $_navigation_class_logger //= Log::Handler->create_logger(__PACKAGE__);
+}
 
 sub add_navigation_route ($controller, $path, $title, $options = {}) {
   $controller->_add_navigation_route($path, $title, $options);
@@ -42,21 +69,22 @@ sub generate_sitemap ($controller, $base_url = '') {
 # registering the same path from a markdown file with order 50).
 sub _add_navigation_route ($self, $path, $title, $options = {}) {
   my $new_order = $options->{order} // 999;
+  my $log       = _navigation_logger_for($self);
 
   if (exists $self->navigation_routes->{$path}) {
     my $existing_order = $self->navigation_routes->{$path}{order} // 999;
     if ($existing_order <= $new_order) {
-      $self->navigation_logger->debug(
+      $log->debug(
             "Skipping navigation route: $path => $title (order $new_order) "
           . "-- existing entry has order $existing_order");
       return $self;
     }
-    $self->navigation_logger->debug(
+    $log->debug(
           "Overriding navigation route: $path => $title (order $new_order "
         . "beats existing order $existing_order)");
   }
   else {
-    $self->navigation_logger->debug("Adding navigation route: $path => $title");
+    $log->debug("Adding navigation route: $path => $title");
   }
 
   $self->navigation_routes->{$path} = {
@@ -81,7 +109,8 @@ sub build_navigation_tree ($self) {
     $self->_insert_into_navigation_tree($tree, $path, $route_data);
   }
 
-  %$_navigation_tree = %$tree;
+  %$_navigation_tree          = %$tree;
+  $_navigation_built_for_count = scalar keys %{ $self->navigation_routes };
   return $_navigation_tree;
 }
 
@@ -165,8 +194,11 @@ sub _navigation_path_segment_to_title ($self, $segment) {
 
 # Render the navigation tree as HTML
 sub _render_navigation ($self, $current_path = '/') {
-  # Ensure tree is built (only builds once since it checks for existing keys)
-  $self->build_navigation_tree() unless keys %{ $self->navigation_tree };
+  # Rebuild whenever routes have been added since the tree was last built -- not just
+  # the first time, since a controller may register routes (e.g. per-clan pages) once
+  # their data becomes known well after the process starts and the first page renders.
+  $self->build_navigation_tree()
+    if scalar keys %{ $self->navigation_routes } != $_navigation_built_for_count;
 
   # Normalize current path
   $current_path =~ s|^/||;
@@ -367,7 +399,8 @@ sub _generate_sitemap ($self, $base_url = '') {
   $base_url =~ s|/$||;
 
   # Build the tree to ensure all intermediate paths are included
-  $self->build_navigation_tree() unless keys %{ $self->navigation_tree };
+  $self->build_navigation_tree()
+    if scalar keys %{ $self->navigation_routes } != $_navigation_built_for_count;
 
   my @urls;
 
