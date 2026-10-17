@@ -109,4 +109,28 @@ sub build ($self) {
     }
   );
 
+  # The navigation fragment, fetched once per page load (lib/ts/navigation.ts) instead of every
+  # page embedding the whole rendered tree inline. POST, not GET, because the route being asked
+  # about is arbitrary path data for THIS request (the page's own current path), not an identity
+  # of the /navigation resource itself -- a GET with the same query string would still work, but
+  # would imply a cacheable, bookmarkable "page" at /navigation?route=..., which it is not: the
+  # tree can change under it (RunStore's example in FictionSite re-syncs clan members on every
+  # request). Every controller extending Base registers this SAME path in its own build(), which
+  # is fine and deliberate: Gears::Router keeps the first registration (see
+  # WebFramework::Role::Navigation::_add_navigation_route's own "existing order wins" rule, the
+  # same behavior this route relies on), so the rest are harmless no-ops. The route travels as a
+  # query param (not a parsed body) since it is the one field this request needs, and reading it
+  # synchronously keeps the handler a plain sub rather than an async one awaiting form_params for
+  # a single value.
+  $router->add(
+    '/navigation',
+    {
+      to => sub ($self, $ctx) {
+        my $route = $ctx->req->query_param('route') // '/';
+        $ctx->res->content_type('text/html; charset=UTF-8');
+        return $self->render_navigation($route);
+      },
+      action => 'http.post',
+    }
+  );
 }

@@ -4,27 +4,34 @@ use v5.42.0;
 use utf8::all;
 use Mooish::Base -role;
 
-our $_navigation_routes = {};
+# The navigation tree used to live in THIS PACKAGE's globals ($_navigation_routes etc.), shared by
+# every consumer only because a role's package subs are the same subs no matter which instance calls
+# them -- an accident of how roles compose, not a real shared store. That accident also meant the
+# only way to read the tree was to re-render the WHOLE thing inline into every page: nothing outside
+# "ask any instance, they all hit the same globals" identified the data as the app's.
+#
+# Storage is now $self->config->config (Gears::Config's own live, shared hashref): one Gears::Config
+# instance per app, handed to every controller via Gears::App::_build_controller's `app => $self`, so
+# $self->config resolves to the identical object whether asked from a controller or from
+# WebFramework::App itself (which also consumes this role, for /sitemap.xml). That is the same kind
+# of shared, app-scoped store the framework already uses for configuration -- not a second, parallel
+# sharing mechanism -- and it is what lets a dedicated endpoint (WebFramework::Controller::Base's
+# POST /navigation) read the SAME tree a page's own render would, on demand, instead of only ever
+# being able to embed it inline.
+my $NAV_KEY = '_navigation';
+
+sub _navigation_store ($self) {
+  my $conf = $self->config->config;
+  return $conf->{$NAV_KEY} //= { routes => {}, tree => {}, built_for_count => -1 };
+}
 
 sub navigation_routes ($self) {
-  return $_navigation_routes;
+  return $self->_navigation_store->{routes};
 }
-
-our $_navigation_tree = {};
 
 sub navigation_tree ($self) {
-  return $_navigation_tree;
+  return $self->_navigation_store->{tree};
 }
-
-# How many routes the tree currently rendered was built from. Routes can arrive after
-# startup (a controller may register a child route once data that was not available at
-# `build()` time -- e.g. a long-running computation's result -- is known), so "built at
-# least once" is not enough to know the tree is current; this compares against the
-# route count at render time instead. A plain count, not a route-identity diff: routes
-# are only ever added (see _add_navigation_route's existing-order-wins rule), never
-# removed, over a process's life, so a count catches every addition without the cost of
-# diffing the hash.
-our $_navigation_built_for_count = -1;
 
 has navigation_logger => (
   is      => 'lazy',
@@ -70,9 +77,10 @@ sub generate_sitemap ($controller, $base_url = '') {
 sub _add_navigation_route ($self, $path, $title, $options = {}) {
   my $new_order = $options->{order} // 999;
   my $log       = _navigation_logger_for($self);
+  my $routes    = $self->navigation_routes;
 
-  if (exists $self->navigation_routes->{$path}) {
-    my $existing_order = $self->navigation_routes->{$path}{order} // 999;
+  if (exists $routes->{$path}) {
+    my $existing_order = $routes->{$path}{order} // 999;
     if ($existing_order <= $new_order) {
       $log->debug(
             "Skipping navigation route: $path => $title (order $new_order) "
@@ -87,7 +95,7 @@ sub _add_navigation_route ($self, $path, $title, $options = {}) {
     $log->debug("Adding navigation route: $path => $title");
   }
 
-  $self->navigation_routes->{$path} = {
+  $routes->{$path} = {
     path       => $path,
     title      => $title,
     order      => $new_order,
@@ -100,7 +108,8 @@ sub _add_navigation_route ($self, $path, $title, $options = {}) {
 
 # Build the navigation tree from registered routes
 sub build_navigation_tree ($self) {
-  my $tree = {};
+  my $tree  = {};
+  my $store = $self->_navigation_store;
 
   # Process each route and insert into tree
   for my $path (sort keys %{ $self->navigation_routes }) {
@@ -109,9 +118,9 @@ sub build_navigation_tree ($self) {
     $self->_insert_into_navigation_tree($tree, $path, $route_data);
   }
 
-  %$_navigation_tree          = %$tree;
-  $_navigation_built_for_count = scalar keys %{ $self->navigation_routes };
-  return $_navigation_tree;
+  %{ $store->{tree} }      = %$tree;
+  $store->{built_for_count} = scalar keys %{ $self->navigation_routes };
+  return $store->{tree};
 }
 
 # Insert a route into the tree structure
@@ -194,11 +203,13 @@ sub _navigation_path_segment_to_title ($self, $segment) {
 
 # Render the navigation tree as HTML
 sub _render_navigation ($self, $current_path = '/') {
+  my $store = $self->_navigation_store;
+
   # Rebuild whenever routes have been added since the tree was last built -- not just
   # the first time, since a controller may register routes (e.g. per-clan pages) once
   # their data becomes known well after the process starts and the first page renders.
   $self->build_navigation_tree()
-    if scalar keys %{ $self->navigation_routes } != $_navigation_built_for_count;
+    if scalar keys %{ $self->navigation_routes } != $store->{built_for_count};
 
   # Normalize current path
   $current_path =~ s|^/||;
@@ -399,8 +410,9 @@ sub _generate_sitemap ($self, $base_url = '') {
   $base_url =~ s|/$||;
 
   # Build the tree to ensure all intermediate paths are included
+  my $store = $self->_navigation_store;
   $self->build_navigation_tree()
-    if scalar keys %{ $self->navigation_routes } != $_navigation_built_for_count;
+    if scalar keys %{ $self->navigation_routes } != $store->{built_for_count};
 
   my @urls;
 
