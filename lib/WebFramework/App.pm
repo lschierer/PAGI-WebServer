@@ -55,7 +55,7 @@ has local_conf_dir => (
   default => sub {
     my $self = shift;
     return $self->local_conf_dir(
-      Path::Tiny::path($FindBin::Bin)->parent->child('share/conf'));
+      Path::Tiny::path($FindBin::Bin)->parent->child('etc/conf'));
   },
   is   => 'rw',
   lazy => 1,
