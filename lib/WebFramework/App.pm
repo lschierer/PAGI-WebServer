@@ -156,6 +156,11 @@ sub run {
   my $port    = $self->config->{config}->{server}->{port};
   my $workers = $self->config->{config}->{server}->{worker_threads} // 2;
 
+  # Seconds a worker's event loop may go without answering before the parent SIGKILLs it (PAGI::Server's own default,
+  # 50, when unset; 0 turns the check off). A project that does heavy work inside a worker, between awaits, sets this
+  # higher -- the kill is silent, the work simply vanishes.
+  my $heartbeat = $self->config->{config}->{server}->{heartbeat_timeout};
+
   my $msg = sprintf('Starting server on host "%s:%s"', $host, $port);
   warn $msg;
   $self->logger->info($msg);
@@ -163,6 +168,7 @@ sub run {
   $self->server(PAGI::Server->new(
     app        => $pagi_stub,
     workers    => $workers,
+    (defined $heartbeat ? (heartbeat_timeout => $heartbeat) : ()),
     host       => $host,
     port       => $port,
     access_log => $self->accessLog,
