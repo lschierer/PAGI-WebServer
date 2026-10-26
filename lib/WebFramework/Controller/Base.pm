@@ -23,6 +23,17 @@ has app_config => (
   },
 );
 
+# PAGI gives an HTTP scope a 'pagi.connection' object but not an SSE scope, while Thunderhorse's context reads
+# ->connection->response_started after EVERY handler (Thunderhorse::Context::try_send_res). An SSE handler only
+# returns when its stream ends, so each stream's end died with `Can't call method "response_started" on an
+# undefined value` in the log. An SSE response is never an ordinary HTTP one, so the stand-in says it has started.
+sub make_facade ($self, $ctx) {
+  my $scope = $ctx->scope;
+  $scope->{'pagi.connection'} //= WebFramework::Controller::SseConnection->new
+    if ( $scope->{type} // '' ) eq 'sse';
+  return $self->SUPER::make_facade($ctx);
+}
+
 sub build ($self) {
   $self->SUPER::build();
   my $router = $self->router;
@@ -133,4 +144,11 @@ sub build ($self) {
       action => 'http.post',
     }
   );
+}
+
+# What an SSE scope's missing 'pagi.connection' is replaced with (make_facade above): only the one question
+# Thunderhorse asks of it, answered "yes, already started".
+package WebFramework::Controller::SseConnection {
+  sub new ($class) { bless {}, $class }
+  sub response_started ($self) { 1 }
 }
