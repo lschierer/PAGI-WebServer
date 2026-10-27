@@ -47,6 +47,7 @@ my $builder = Module::Build->new(
     'MooX::TypeTiny'           => 0,
     'MooX::XSConstructor'      => 0,
     'Net::Async::HTTP'         => 0,
+    'Net::HTTP2'               => 0,
     'Net::SSLeay'              => 0,
     'List::AllUtils'           => 0,
     'List::MoreUtils'          => 0,
