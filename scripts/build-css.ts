@@ -69,6 +69,15 @@ export interface BuildCSSOptions {
    * that needs it, exactly as @spectrum-css/tokens was.
    */
   tokensFile?: string;
+  /**
+   * Generate the legacy Spectrum 1 `--spectrum-*` token layer at all. Defaults to true.
+   *
+   * A site that has moved to Spectrum Web Components gen2 uses `--swc-*` tokens, which
+   * its own stylesheets import from @adobe/spectrum-wc, and has no use for the legacy
+   * layer: pass false and nothing is generated. The sites that have not moved leave this
+   * alone and are unaffected.
+   */
+  legacyTokens?: boolean;
 }
 
 export async function buildCSS(options: BuildCSSOptions): Promise<void> {
@@ -87,11 +96,13 @@ export async function buildCSS(options: BuildCSSOptions): Promise<void> {
 
   // Before linting, because a sheet that @imports the token layer needs it to exist, and
   // before postcss-import inlines anything, for the same reason.
-  await buildSpectrumTokens({
-    outFile:
-      options.tokensFile ??
-      path.join(options.stylesDir, "generated/spectrum-tokens.css"),
-  });
+  if (options.legacyTokens ?? true) {
+    await buildSpectrumTokens({
+      outFile:
+        options.tokensFile ??
+        path.join(options.stylesDir, "generated/spectrum-tokens.css"),
+    });
+  }
 
   // Lint first, fixing what can be fixed. A remaining error aborts the build -
   // a stylesheet that does not satisfy the site's own rules should not ship.

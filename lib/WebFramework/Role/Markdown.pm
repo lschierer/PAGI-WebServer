@@ -11,12 +11,28 @@ use Gears::Template::TT;
 use Carp;
 require WebFramework::Service::Markdown;
 
+# The site's class vocabulary ('spectrum-css' unless its config says `ui_profile: swc`).
+# Read through app->config the same way pages_dir reads markdown_dir below. Absent or
+# unreadable config means the default, never an error: a site that has not opted in must
+# keep working exactly as it did.
+sub _ui_profile ($self) {
+  my $conf =
+      $self->can('app_config') ? $self->app_config
+    : ($self->can('app') && defined($self->app)) ? $self->app->config
+    :                                              undef;
+  return (ref($conf) && $conf->{config} ? $conf->{config}->{ui_profile} : undef)
+    // 'spectrum-css';
+}
+
 has markdown => (
   hidden  => 1,
   is      => 'ro',
   default => sub {
     my $self = shift;
-    my $md   = WebFramework::Service::Markdown->new(log_dir => $self->log_dir);
+    my $md   = WebFramework::Service::Markdown->new(
+      log_dir    => $self->log_dir,
+      ui_profile => $self->_ui_profile,
+    );
     return $md;
   },
 );
