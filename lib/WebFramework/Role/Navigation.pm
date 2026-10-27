@@ -5,6 +5,7 @@ use utf8::all;
 use Mooish::Base -role;
 
 require Path::Tiny;
+require WebFramework::UI;
 
 # The navigation tree used to live in THIS PACKAGE's globals ($_navigation_routes etc.), shared by
 # every consumer only because a role's package subs are the same subs no matter which instance calls
@@ -241,6 +242,14 @@ sub _render_navigation ($self, $current_path = '/') {
   $current_path =~ s|^/||;
   $current_path =~ s|/$||;
 
+  my $ui = WebFramework::UI->profile($self->config->config->{ui_profile});
+  if (($ui->{tree_markup} // '') eq 'site') {
+    return '<ul class="site-tree-list">'
+      . $self->_render_navigation_site_level($self->navigation_tree,
+      $current_path, '', 0, $ui)
+      . '</ul>';
+  }
+
   my $html =
       '<ul class="spectrum-TreeView spectrum-TreeView--quiet'
     . ' spectrum-TreeView--sizeM" role="tree">';
@@ -252,10 +261,66 @@ sub _render_navigation ($self, $current_path = '/') {
   return $html;
 }
 
+# How one node is to be drawn: which flags decide whether it is expanded, shown, selected.
+# Shared by both renderers (_render_navigation_tree_level for the @spectrum-css markup,
+# _render_navigation_site_level for the `site` markup) so that they cannot disagree about
+# what is open or visible. $node_path, $is_current etc. keep the names they had when this
+# lived inline.
+sub _navigation_node_state ($self, $node, $current_path, $parent_path, $depth) {
+  my $node_path = $node->{path};
+  $node_path =~ s|^/||;
+
+  my $is_current  = ($node_path eq $current_path);
+  my $is_ancestor = $current_path =~ m|^\Q$node_path\E/|;
+  my $is_sibling  = $self->_navigation_is_sibling($node_path, $current_path);
+  my $is_child =
+    $self->_navigation_is_immediate_child($node_path, $current_path);
+  my $is_top_level = ($depth == 0);
+
+  # Determine if this node should be expanded (showing children)
+  my $should_expand = $is_current || $is_ancestor;
+
+  # Determine if this node itself should be visible
+  my $parent_is_ancestor = 0;
+  if ($parent_path) {
+    my $parent_path_normalized = $parent_path;
+    $parent_path_normalized =~ s|^/||;
+    $parent_is_ancestor = $current_path =~ m|^\Q$parent_path_normalized\E/|;
+  }
+  my $should_be_visible =
+       $is_top_level
+    || $is_ancestor
+    || $is_current
+    || $is_sibling
+    || $is_child
+    || $parent_is_ancestor;
+
+  # The id used to be "item$index", but $index is a per-sibling-list counter and this
+  # renderer recurses, so every level restarted at item0 - one live page carried 1090
+  # duplicate ids. Deriving it from the node's path makes it unique and stable across
+  # renders. Nothing currently reads these ids; they exist so that aria and deep links
+  # have something to point at.
+  my $item_id = 'nav-' . ($node_path =~ s{[^A-Za-z0-9_-]+}{-}gr);
+  $item_id =~ s/-+$//;
+
+  return {
+    node_path         => $node_path,
+    is_current        => $is_current,
+    should_expand     => $should_expand,
+    should_be_visible => $should_be_visible,
+    has_children      => scalar(keys %{ $node->{children} }) > 0,
+    item_id           => $item_id,
+  };
+}
+
 # Render a level of the tree
 sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
   $depth) {
   my $html = '';
+
+  # Class vocabulary for the links below; 'spectrum-css' unless the site opts in. See
+  # WebFramework::UI. Looked up per level, not per node.
+  my $ui = WebFramework::UI->profile($self->config->config->{ui_profile});
 
   # Sort nodes by order, then by title
   my @sorted_keys = sort {
@@ -264,37 +329,15 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
   } keys %$nodes;
 
   for my $index (0 .. $#sorted_keys) {
-    my $key       = $sorted_keys[$index];
-    my $node      = $nodes->{$key};
-    my $node_path = $node->{path};
-    $node_path =~ s|^/||;
+    my $key  = $sorted_keys[$index];
+    my $node = $nodes->{$key};
 
-    my $is_current  = ($node_path eq $current_path);
-    my $is_ancestor = $current_path =~ m|^\Q$node_path\E/|;
-    my $is_sibling  = $self->_navigation_is_sibling($node_path, $current_path);
-    my $is_child =
-      $self->_navigation_is_immediate_child($node_path, $current_path);
-    my $is_top_level = ($depth == 0);
-
-    # Determine if this node should be expanded (showing children)
-    my $should_expand = $is_current || $is_ancestor;
-
-    # Determine if this node itself should be visible
-    my $parent_is_ancestor = 0;
-    if ($parent_path) {
-      my $parent_path_normalized = $parent_path;
-      $parent_path_normalized =~ s|^/||;
-      $parent_is_ancestor = $current_path =~ m|^\Q$parent_path_normalized\E/|;
-    }
-    my $should_be_visible =
-         $is_top_level
-      || $is_ancestor
-      || $is_current
-      || $is_sibling
-      || $is_child
-      || $parent_is_ancestor;
-
-    my $has_children = keys %{ $node->{children} } > 0;
+    my $state =
+      $self->_navigation_node_state($node, $current_path, $parent_path, $depth);
+    my ($node_path, $is_current, $should_expand, $should_be_visible,
+      $has_children)
+      = @{$state}
+      {qw(node_path is_current should_expand should_be_visible has_children)};
 
     # Build class list
     my @classes = ('spectrum-TreeView-item');
@@ -304,13 +347,7 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
 
     my $class_str = join(' ', @classes);
 
-    # The id used to be "item$index", but $index is a per-sibling-list counter and this
-    # renderer recurses, so every level restarted at item0 - one live page carried 1090
-    # duplicate ids. Deriving it from the node's path makes it unique and stable across
-    # renders. Nothing currently reads these ids; they exist so that aria and deep links
-    # have something to point at.
-    my $item_id = 'nav-' . ($node_path =~ s{[^A-Za-z0-9_-]+}{-}gr);
-    $item_id =~ s/-+$//;
+    my $item_id = $state->{item_id};
 
     $html .= qq|  <li id="$item_id" class="$class_str" role="treeitem"|;
     $html .= qq| aria-expanded="true"|  if $should_expand  && $has_children;
@@ -318,9 +355,9 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
     $html .= qq|>\n|;
 
     # Link
-    my $link_class = 'spectrum-TreeView-itemLink';
-    $html .=
-      qq|    <span class="$link_class spectrum-Link spectrum-Link--quiet">\n|;
+    my $link_class = join(' ', grep { defined } 'spectrum-TreeView-itemLink',
+      $ui->{tree_row_link});
+    $html .= qq|    <span class="$link_class">\n|;
 
     my $itemIcon;
     if ($has_children) {
@@ -369,7 +406,7 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
 
     $html .= qq|      <span class="spectrum-TreeView-itemLabel">
           <span focusable="false" aria-hidden="true" role="img" class="spectrum-Icon spectrum-Icon--sizeM spectrum-TreeView-itemIcon">@{[ $self->_icon_svg($itemIcon) ]}</span>
-          <a href="$node->{path}"$aria_current title="@{[ $self->_navigation_escape_html($node->{title}) ]}" class="spectrum-Link spectrum-Link--secondary spectrum-Link--quiet">$node->{title}</a>
+          <a href="$node->{path}"$aria_current title="@{[ $self->_navigation_escape_html($node->{title}) ]}" class="$ui->{tree_link}">$node->{title}</a>
          </span>\n|;
     $html .= qq|    </span>\n|;
 
@@ -390,6 +427,96 @@ sub _render_navigation_tree_level ($self, $nodes, $current_path, $parent_path,
     }
 
     $html .= qq|  </li>\n|;
+  }
+
+  return $html;
+}
+
+# Render a level of the tree as the `site` markup: nested lists, disclosure-navigation style.
+#
+# WHY NOT role=tree. The other renderer marks the list up as an ARIA tree. That role is a
+# promise: arrow keys move between nodes, Left/Right collapse and expand, one node is in the
+# tab order, and so on. Nothing here implemented any of it - every link and toggle is an
+# ordinary tab stop - so assistive technology was told to expect behaviour that does not
+# exist. A site's navigation is a list of links, for which the pattern is "disclosure
+# navigation": nested lists, with a button per branch whose aria-expanded says whether its
+# list is showing. That is exactly what this emits, and the buttons already worked that way.
+#
+# The visual tree is unchanged; only the semantics are now truthful.
+#
+# SIZE. This emits roughly a third of the other renderer's markup per node: the three icons
+# are drawn by CSS (see styles/swc/tree.css) instead of being inlined as SVG into every node,
+# there is no per-node link class, and hidden state is the `hidden` attribute.
+sub _render_navigation_site_level ($self, $nodes, $current_path, $parent_path,
+  $depth, $ui)
+{
+  my $html = '';
+
+  my @sorted_keys = sort {
+         ($nodes->{$a}{order} // 999) <=> ($nodes->{$b}{order} // 999)
+      || ($nodes->{$a}{title} cmp $nodes->{$b}{title})
+  } keys %$nodes;
+
+  for my $key (@sorted_keys) {
+    my $node = $nodes->{$key};
+    my $state =
+      $self->_navigation_node_state($node, $current_path, $parent_path, $depth);
+    my ($node_path, $is_current, $should_expand, $should_be_visible,
+      $has_children, $item_id)
+      = @{$state}{
+      qw(node_path is_current should_expand should_be_visible has_children item_id)
+      };
+
+    my $title = $self->_navigation_escape_html($node->{title});
+    my $href  = $self->_navigation_escape_html($node->{path});
+
+    $html .= qq|<li id="$item_id"|;
+    $html .= ' hidden' unless $should_be_visible;
+    $html .= qq|>\n|;
+
+    $html .= $is_current
+      ? qq|<div class="site-tree-row is-current">|
+      : qq|<div class="site-tree-row">|;
+
+    my $label_class;
+    if ($has_children) {
+      my $expanded = $should_expand ? 'true' : 'false';
+
+      # A real <button>, so expanding is keyboard- and screen-reader-operable. The label
+      # names the node it opens; aria-controls points at the list it shows and hides.
+      $html .=
+          qq|<button type="button" class="site-tree-toggle"|
+        . qq| aria-expanded="$expanded" aria-controls="$item_id-children"|
+        . qq| aria-label="Toggle $title"></button>|;
+      $label_class = 'site-tree-label site-tree-folder';
+    }
+    else {
+      # Reserves the toggle's width so a leaf's label lines up with a folder's at the same
+      # depth. Purely presentational.
+      $html .= q|<span class="site-tree-toggle site-tree-leaf" aria-hidden="true"></span>|;
+      $label_class = 'site-tree-label site-tree-doc';
+    }
+
+    # aria-current is the machine-readable signal of which page is open; the is-current class
+    # only drives the highlight.
+    my $aria_current = $is_current ? ' aria-current="page"' : '';
+    my $link_class =
+      defined $ui->{tree_link} ? qq| class="$ui->{tree_link}"| : '';
+
+    $html .= qq|<span class="$label_class"><a href="$href"$aria_current|
+      . qq| title="$title"$link_class>$title</a></span></div>\n|;
+
+    if ($has_children) {
+      # Always rendered, hidden when its parent is collapsed, so expanding needs no request.
+      $html .= qq|<ul id="$item_id-children" class="site-tree-list"|;
+      $html .= ' hidden' unless $should_expand;
+      $html .= qq|>\n|;
+      $html .= $self->_render_navigation_site_level($node->{children},
+        $current_path, $node_path, $depth + 1, $ui);
+      $html .= qq|</ul>\n|;
+    }
+
+    $html .= qq|</li>\n|;
   }
 
   return $html;

@@ -9,6 +9,14 @@ use Path::Tiny;
 use YAML::XS      qw(Load);
 use Unicode::UTF8 qw(encode_utf8 decode_utf8);
 require Mojo::DOM58;
+require WebFramework::UI;
+
+# Which class vocabulary spectrum_formatting emits: 'spectrum-css' (the default, and what
+# every site got before profiles existed) or 'swc'. See WebFramework::UI.
+has ui_profile => (
+  is      => 'ro',
+  default => sub {'spectrum-css'},
+);
 
 sub md ($self, $markdown_text) {
   return "" unless defined $markdown_text;
@@ -103,10 +111,16 @@ sub md ($self, $markdown_text) {
   # strip out the extra paragraphs we inserted to break up the sections.
   $html =~ s{<p>\s*\x{200B}\s*</p>}{}g;
 
-  # Fix for GFM Alerts - convert blockquotes with alert syntax to divs
+  # Fix for GFM Alerts - convert blockquotes with alert syntax to the profile's callout.
+  my $callout = WebFramework::UI->profile($self->ui_profile)->{callout};
   $html =~
 s{<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](.*?)</p>(.*?)</blockquote>}
-              {<div class="spectrum-AlertBanner is-open  spectrum-AlertBanner--\L$1\E"><p class="spectrum-Alert-Banner-body">$2</p>$3</div>}gis;
+   {
+     my ($kind, $first, $rest) = (lc($1), $2, $3);
+     sprintf($callout->{open}, $kind)
+       . qq{<p class="$callout->{body_class}">$first</p>$rest}
+       . $callout->{close}
+   }gise;
 
   return $html;
 }
@@ -175,109 +189,109 @@ sub render_with_frontmatter {
 
 sub spectrum_formatting ($c, $html_content) {
   my $dom = Mojo::DOM58->new($html_content);
-
-  my %spectrum_h = (
-    h1 => "spectrum-Heading spectrum-Heading--sizeXXL",
-    h2 => "spectrum-Heading spectrum-Heading--sizeXL",
-    h3 => "spectrum-Heading spectrum-Heading--sizeL",
-    h4 => "spectrum-Heading spectrum-Heading--sizeM",
-    h5 => "spectrum-Heading spectrum-Heading--sizeS",
-    h6 => "spectrum-Heading spectrum-Heading--sizeXS",
-  );
+  my $ui  = WebFramework::UI->profile($c->ui_profile);
+  my $swc = $c->ui_profile eq 'swc';
 
   # Add header classes
-  for my $tag (keys %spectrum_h) {
-    $dom->find($tag)->each(sub { $_->attr(class => $spectrum_h{$tag}) });
+  for my $tag (keys $ui->{heading}->%*) {
+    $dom->find($tag)->each(sub { $_->attr(class => $ui->{heading}{$tag}) });
   }
 
   # Add paragraph classes
   $dom->find('p')->each(sub {
     # Skip if already has spectrum classes (e.g., from alert formatting)
     my $existing_class = $_->attr('class') // '';
-    return if $existing_class =~ /^spectrum/;
+    return if $existing_class =~ /^(?:spectrum|site-callout)/;
 
-    $_->attr(
-      class => "spectrum-Body spectrum-Body--serif spectrum-Body--sizeM");
+    $_->attr(class => $ui->{paragraph});
   });
 
   # Add list item classes
   $dom->find('li')->each(sub {
-    $_->attr(
-      class => "spectrum-Body spectrum-Body--serif spectrum-Body--sizeM");
+    $_->attr(class => $ui->{list_item});
   });
 
-  # Add link classes
+  # Add link classes. Under gen2, an anchor inside an <svg> is left alone: a link in
+  # generated SVG is part of the drawing, and must not pick up body-copy link styling.
   $dom->find('a')->each(sub {
-    $_->attr(
-      class => "spectrum-Link spectrum-Link--primary spectrum-Link--quiet");
+    return if $swc && $_->ancestors('svg')->size;
+    $_->attr(class => $ui->{link});
   });
 
-  # Collapse nested strong/em or em/strong into a single span with both classes
-  for my $outer (qw(strong em)) {
-    my $inner = $outer eq 'strong' ? 'em' : 'strong';
-    $dom->find("${outer} > ${inner}")->each(sub {
-      my $inner_el = $_;
-      my $outer_el = $inner_el->parent;
-      # Only collapse if the outer has no other content besides the inner
-      return
-        unless $outer_el->children->size == 1
-        && $outer_el->text =~ /^\s*$/;
-      my $span = $dom->new_tag(
-        'span',
-        class => 'spectrum-Body-strong spectrum-Body-emphasized',
-        sub { $inner_el->content }
-      );
-      $outer_el->replace($span);
-    });
+  # Collapse nested strong/em or em/strong into a single span with both classes.
+  # Only where the profile has a combined class; gen2 has none, and native nesting of
+  # <strong><em> already renders bold italic.
+  if (defined $ui->{strong_emphasis}) {
+    for my $outer (qw(strong em)) {
+      my $inner = $outer eq 'strong' ? 'em' : 'strong';
+      $dom->find("${outer} > ${inner}")->each(sub {
+        my $inner_el = $_;
+        my $outer_el = $inner_el->parent;
+        # Only collapse if the outer has no other content besides the inner
+        return
+          unless $outer_el->children->size == 1
+          && $outer_el->text =~ /^\s*$/;
+        my $span = $dom->new_tag(
+          'span',
+          class => $ui->{strong_emphasis},
+          sub { $inner_el->content }
+        );
+        $outer_el->replace($span);
+      });
+    }
   }
 
   # Add emphasis class
-  $dom->find('em')->each(sub {
-    $_->attr(class => "spectrum-Body-emphasized");
-  });
+  if (defined $ui->{emphasis}) {
+    $dom->find('em')->each(sub {
+      $_->attr(class => $ui->{emphasis});
+    });
+  }
 
   # Add strong class
-  $dom->find('strong')->each(sub {
-    $_->attr(class => "spectrum-Body-strong");
-  });
+  if (defined $ui->{strong}) {
+    $dom->find('strong')->each(sub {
+      $_->attr(class => $ui->{strong});
+    });
+  }
 
+  # A divider is a class on the <hr>, or the <hr> replaced by a custom element.
+  my $divider = $ui->{divider};
   $dom->find('hr')->each(sub {
-    $_->attr(class => 'spectrum-Divider spectrum-Divider--sizeM');
+    if (defined $divider->{element}) {
+      my %attrs = ($divider->{attributes} // {})->%*;
+      my $tag   = $dom->new_tag($divider->{element}, %attrs);
+      $_->replace($tag);
+    }
+    else {
+      $_->attr(class => $divider->{class});
+    }
   });
 
   # Style blockquotes using Spectrum tokens
+  my $tp = $ui->{token_prefix};
   $dom->find('blockquote')->each(sub {
     $_->attr(
-      class => 'spectrum-Body spectrum-Body--sizeM',
+      class => $ui->{blockquote},
       style =>
-'border-inline-start: 4px solid var(--spectrum-accent-color-500); padding-block: var(--spectrum-spacing-200); padding-inline-start: var(--spectrum-spacing-300); margin-inline-start: 0; color: var(--spectrum-neutral-subdued-content-color-default);',
+"border-inline-start: 4px solid var(--$tp-accent-color-500); padding-block: var(--$tp-spacing-200); padding-inline-start: var(--$tp-spacing-300); margin-inline-start: 0; color: var(--$tp-neutral-subdued-content-color-default);",
     );
   });
 
-  # Add table classes
-  $dom->find('table')->each(sub {
-    $_->attr(class => 'spectrum-Table spectrum-Table--sizeM');
-  });
-
-  $dom->find('thead')->each(sub {
-    $_->attr(class => 'spectrum-Table-head');
-  });
-
-  $dom->find('tbody')->each(sub {
-    $_->attr(class => 'spectrum-Table-body');
-  });
-
-  $dom->find('th')->each(sub {
-    $_->attr(class => 'spectrum-Table-headCell');
-  });
-
-  $dom->find('td')->each(sub {
-    $_->attr(class => 'spectrum-Table-cell');
-  });
-
-  $dom->find('tr')->each(sub {
-    $_->attr(class => 'spectrum-Table-row');
-  });
+  # Add table classes. An undefined entry in the profile means that element gets none;
+  # gen2 styles a table from one class on the <table> and plain markup beneath it.
+  my %table_tags = (
+    table => 'table',
+    thead => 'table_head',
+    tbody => 'table_body',
+    th    => 'table_head_cell',
+    td    => 'table_cell',
+    tr    => 'table_row',
+  );
+  for my $tag (sort keys %table_tags) {
+    my $class = $ui->{ $table_tags{$tag} } // next;
+    $dom->find($tag)->each(sub { $_->attr(class => $class) });
+  }
 
   return $dom->to_string;
 }
