@@ -143,7 +143,11 @@ sub parse_one ($self, $item) {
   return $out;
 }
 
+# The attributes the DOM pass may have missed (markup it could not parse). Not the contents of <script> and <style>:
+# they are code, not markup, and code like `let data = JSON.parse($('x'))` reads as an attribute to the pattern below,
+# which then reports "JSON.parse($(" as a link. Their opening tags are kept, so a <script src=...> is still seen.
 sub _scan_html_for_urls ($html) {
+  $html =~ s{(<(script|style)\b[^>]*>).*?(</\2\s*>)}{$1$3}gis;
   my @out;
   while (
     $html =~ m{
