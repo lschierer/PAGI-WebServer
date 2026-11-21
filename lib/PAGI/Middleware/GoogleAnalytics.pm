@@ -51,6 +51,14 @@ sub wrap {
           # Non-HTML or streaming: pass through directly
           await $send->($event);
         }
+        elsif (defined $event->{file} || defined $event->{fh}) {
+          # HTML sent as a file/fh (e.g. send_file). There is no inline body
+          # to rewrite, and PAGI::Server >= 0.002012 forbids mixing inline
+          # bytes with a file body, so forward it untouched (no GA tag).
+          await $send->($original_start);
+          $headers_sent = 1;
+          await $send->($event);
+        }
         else {
           # HTML: buffer body parts
           push @body_parts, $event->{body} // '';
